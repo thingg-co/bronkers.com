@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture - Brokners</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/themes.css">
+<link rel="stylesheet" href="../css/components.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+/* document skin shared with whitepaper.html, mapped onto site tokens */
+article {
+  max-width: 76ch;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 6rem;
+  line-height: 1.618;
+}
+article h1 { font-size: 2.2rem; letter-spacing: -0.02em; margin: 0 0 0.4rem; }
+article h2 {
+  font-size: 1.35rem;
+  margin: 2.6rem 0 0.8rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--border-color);
+}
+article h3 { font-size: 1.05rem; margin: 1.6rem 0 0.4rem; }
+article p, article li { color: var(--text-primary); }
+article li::marker { color: var(--accent-primary); }
+article em:first-child { color: var(--text-secondary); }
+article table { border-collapse: collapse; width: 100%; font-size: 0.92rem; display: block; overflow-x: auto; }
+article th {
+  text-align: left; text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: 0.74rem; color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-color); padding: 0.5rem 0.9rem 0.5rem 0;
+}
+article td { border-bottom: 1px solid var(--border-color); padding: 0.55rem 0.9rem 0.55rem 0; vertical-align: top; }
+article code, article pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
+article code { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.08em 0.35em; }
+article pre { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.9rem 1.1rem; overflow-x: auto; }
+article pre code { background: none; border: none; padding: 0; }
+article .mermaid { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; overflow-x: auto; }
+.doc-fallback { color: var(--text-secondary); }
+</style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-B2190XB9V8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-B2190XB9V8');
+</script>
+</head>
+<body>
+<nav class="nav">
+    <div class="container">
+        <div class="nav-content">
+            <a href="/" class="logo">BROK<span class="typo-n">N</span>ERS</a>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="/">The Brains</a></li>
+                <li><a href="/app">The Terminal</a></li>
+                <li><a href="/docs/whitepaper" class="active">The Paper</a></li>
+            </ul>
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+            <button class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<main>
+<article id="doc">
+    <p class="doc-fallback">Loading <a href="architecture.md">architecture.md</a>…</p>
+</article>
+</main>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>Brok<span class="typo-n">n</span>ers is a research prototype by Darkly Fund. Testnet only. Not an offering. Provided as-is, without warranty of any kind. &copy; 2025</p>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/theme-switcher.js"></script>
+<script src="../js/main.js"></script>
+<script type="module">
+// architecture.md stays the single source of truth; this page renders it.
+try {
+    const [{ marked }, res] = await Promise.all([
+        import("https://esm.sh/marked@14.1.2"),
+        fetch("architecture.md"),
+    ]);
+    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+    const md = await res.text();
+    document.getElementById("doc").innerHTML = marked.parse(md);
+    // mermaid blocks: marked emits <pre><code class="language-mermaid">
+    const blocks = [...document.querySelectorAll("code.language-mermaid")];
+    if (blocks.length) {
+        const { default: mermaid } = await import("https://esm.sh/mermaid@11");
+        blocks.forEach((c) => {
+            const div = document.createElement("div");
+            div.className = "mermaid";
+            div.textContent = c.textContent;
+            c.closest("pre").replaceWith(div);
+        });
+        const dark = document.documentElement.getAttribute("data-theme") === "dark";
+        mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral" });
+        await mermaid.run();
+    }
+} catch (err) {
+    document.querySelector(".doc-fallback").innerHTML =
+        `Couldn't render the document here (${err.message}). Read the raw <a href="architecture.md">architecture.md</a> instead.`;
+}
+</script>
+</body>
+</html>

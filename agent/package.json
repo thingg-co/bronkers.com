@@ -1,0 +1,23 @@
+{
+  "name": "darkly-trader-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain runtime for a Darkly Trader: decrypt genome -> Claude -> guarded on-chain execution",
+  "scripts": {
+    "genome": "tsx src/tools/make-genome.ts",
+    "loop": "tsx src/index.ts",
+    "report": "tsx src/report.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

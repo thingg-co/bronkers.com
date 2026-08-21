@@ -1,0 +1,579 @@
+/* Brokners concept page — additions only; everything else comes from
+   base.css tokens and components.css. Silly copy, serious cascade. */
+
+/* ── Brokners identity: typo pink + a display face ─────────── */
+/* the fund stays institutional blue; this page runs its own accent.
+   Tokens override on body (attribute lives on <html>), so both themes
+   and every component that reads the tokens follow automatically. */
+body {
+    --accent-primary: #d6336c;
+    --accent-primary-hover: #a61e4d;
+}
+
+[data-theme="dark"] body {
+    --accent-primary: #f06595;
+    --accent-primary-hover: #f783ac;
+}
+
+::selection {
+    background: var(--accent-primary);
+    color: #ffffff;
+}
+
+main h1,
+main h2,
+main h3 {
+    font-family: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 800;
+}
+
+/* the wordmark: brokers, misspelled on purpose — the inserted N is the
+   whole joke, so it gets rendered as exactly that: a letter that was
+   squeezed in later, in the wrong color, at the wrong angle */
+.wordmark {
+    font-size: clamp(3rem, 9vw, 5.5rem);
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+
+.typo-n {
+    display: inline-block;
+    color: var(--accent-primary);
+    transform: rotate(7deg) translateY(-0.08em);
+    margin: 0 -0.02em;
+}
+
+/* the nav wordmark matches the hero, at nav scale — .typo-n is em-based,
+   so the same span just works smaller */
+.logo {
+    font-family: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.section-title {
+    text-decoration: underline wavy var(--accent-primary);
+    text-decoration-thickness: 3px;
+    text-underline-offset: 0.35em;
+}
+
+/* specimen jars sit like stickers: slightly askew until you look at them */
+.features-grid .trader-card:nth-child(odd) {
+    transform: rotate(-1.2deg);
+}
+
+.features-grid .trader-card:nth-child(even) {
+    transform: rotate(1deg);
+}
+
+.features-grid .trader-card:hover {
+    transform: rotate(0deg) translateY(-4px);
+}
+
+/* looking closely agitates the specimen */
+.trader-card:hover .bubble {
+    animation-duration: 2s;
+}
+
+.trader-card:hover .jar-brain {
+    animation-duration: 1.5s;
+}
+
+/* ── vertical rhythm tweaks ────────────────────────────────── */
+/* the site-wide scale was tightened in main.css; this page only slims
+   the one short callout that doesn't need a full section's padding */
+.section:has(> .container > .research-banner) {
+    padding: var(--space-lg) 0;
+}
+
+/* a note between title and grid shouldn't double the gap */
+.roster-note + .features-grid {
+    margin-top: 0;
+}
+
+/* ── alternating section wells ─────────────────────────────── */
+.section-well {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* keep cards readable inside wells: in dark mode --bg-card matches
+   --bg-secondary, so step cards down to the page ground instead */
+.section-well .feature-card {
+    background: var(--bg-primary);
+}
+
+/* ── card rows center when incomplete ──────────────────────── */
+/* this stylesheet loads only on the Gigabrains page, so overriding
+   .features-grid here is page-scoped: flex centers orphan cards in a
+   partial row, which grid's fixed tracks cannot */
+.features-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-lg);
+    margin-top: var(--space-lg);
+}
+
+.features-grid .feature-card {
+    flex: 1 1 300px;
+    max-width: 420px;
+}
+
+/* ── ticker tape ───────────────────────────────────────────── */
+.ticker {
+    overflow: hidden;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.ticker-track {
+    display: inline-block;
+    padding: var(--space-xs) 0;
+    animation: ticker-scroll 40s linear infinite;
+}
+
+.ticker-track span {
+    margin-right: var(--space-xl);
+}
+
+.ticker-track span::before {
+    content: "◆";
+    color: var(--accent-primary);
+    margin-right: var(--space-xs);
+    font-size: 0.7em;
+}
+
+@keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+/* ── hero ──────────────────────────────────────────────────── */
+.brain-hero h1 {
+    letter-spacing: 0.06em;
+}
+
+/* the hero doesn't need a monument plinth: base.css gives .page-header a
+   2xl top pad sized for darkly's sparse pages; ours sits under a ticker and
+   goes straight into content, so it gets a much shorter one — shorter still
+   on mobile where every vertical pixel is scroll. */
+.page-header {
+    /* deliberately symmetric: equal air above and below the hero group */
+    padding: var(--space-2xl) 0;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        padding: var(--space-xl) 0;
+    }
+}
+
+/* the eyebrow is a quiet pill, not a pink shout — the wordmark is the star.
+   Flex keeps the diamond optically centered; the right padding is trimmed by
+   the trailing letter-space uppercase tracking leaves after the last glyph. */
+/* inline-block, not flex: flex would turn inline children (like the .sic
+   span) into separate items that cannot share line-wrapping — on narrow
+   screens the pill then overflows instead of wrapping like a sentence */
+.hero-eyebrow {
+    display: inline-block;
+    max-width: min(92%, 36rem);
+    text-align: center;
+    text-wrap: balance;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 0.35rem 0.95em 0.35rem 1.05em;
+    margin-bottom: var(--space-md);
+}
+
+.hero-eyebrow::before {
+    content: "\25C6";
+    color: var(--accent-primary);
+    font-size: 0.7em;
+    margin-right: 0.55em;
+    vertical-align: 0.15em;
+}
+
+/* keep the hero grouped: eyebrow breathes above, subtitle hugs the wordmark */
+/* hero rhythm, optically exact: the wordmark's line box carries ~0.2em of
+   empty font descent below the glyphs, so its bottom margin shaves that off
+   in em (scales with the type). Result: visual gap above the subtitle =
+   --space-2xl = the header's bottom padding, at every viewport width. */
+.brain-hero .hero-eyebrow {
+    margin-bottom: var(--space-lg);
+}
+
+.brain-hero .wordmark {
+    margin-bottom: calc(var(--space-2xl) - 0.28em);
+}
+
+.brain-hero .page-subtitle {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.hero-brain {
+    display: inline-block;
+    margin-left: var(--space-sm);
+    animation: brain-bob 3s ease-in-out infinite;
+}
+
+@keyframes brain-bob {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50% { transform: translateY(-0.35rem) rotate(4deg); }
+}
+
+/* ── specimen jars ─────────────────────────────────────────── */
+.jar {
+    position: relative;
+    width: 5rem;
+    height: 6rem;
+    margin: 0 auto var(--space-md);
+    border: 2px solid var(--border-color);
+    border-radius: 0.8rem 0.8rem 1.6rem 1.6rem;
+    background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-card));
+    overflow: hidden;
+}
+
+.jar-lid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0.7rem;
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.jar-brain {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    animation: brain-float 4s ease-in-out infinite;
+}
+
+@keyframes brain-float {
+    0%, 100% { transform: translateY(0.1rem); }
+    50% { transform: translateY(-0.2rem); }
+}
+
+.bubble {
+    position: absolute;
+    bottom: -0.5rem;
+    width: 0.3rem;
+    height: 0.3rem;
+    border: 1px solid var(--accent-primary);
+    border-radius: 50%;
+    opacity: 0;
+    animation: bubble-rise 5s ease-in infinite;
+}
+
+.bubble.b1 { left: 22%; animation-delay: 0s; }
+.bubble.b2 { left: 50%; animation-delay: 1.7s; width: 0.2rem; height: 0.2rem; }
+.bubble.b3 { left: 72%; animation-delay: 3.1s; }
+
+@keyframes bubble-rise {
+    0% { transform: translateY(0); opacity: 0; }
+    15% { opacity: 0.7; }
+    85% { opacity: 0.4; }
+    100% { transform: translateY(-5rem); opacity: 0; }
+}
+
+.flavor {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    margin: var(--space-xs) 0 0;
+}
+
+/* ── vibes vs invariants ───────────────────────────────────── */
+.tablewrap {
+    overflow-x: auto;
+    margin: var(--space-lg) 0;
+}
+
+.vibes-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.vibes-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border-color);
+    padding: var(--space-xs) var(--space-md) var(--space-xs) 0;
+}
+
+.vibes-table td {
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
+    vertical-align: top;
+    line-height: 1.618;
+}
+
+.vibes-table td:first-child {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.vibes-table code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-xs);
+}
+
+.doc-links.center {
+    text-align: center;
+    margin-top: var(--space-md);
+}
+
+@media (max-width: 640px) {
+    .vibes-table td:first-child { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ticker-track,
+    .hero-brain,
+    .jar-brain,
+    .bubble {
+        animation: none;
+    }
+}
+
+.research-banner {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    color: var(--text-secondary);
+    line-height: 1.618;
+}
+
+.research-banner strong {
+    color: var(--text-primary);
+}
+
+.legal-panel h4 {
+    margin-bottom: var(--space-sm);
+    color: var(--text-primary);
+}
+
+.legal-panel p + p {
+    margin-top: var(--space-sm);
+}
+
+.doc-links a {
+    font-weight: 600;
+}
+
+.roster-note {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-lg);
+}
+
+/* a note that FOLLOWS the card grid needs breathing room above it —
+   proportionate to the tightened rhythm, but still clearly separated */
+.features-grid + .roster-note {
+    margin-top: var(--space-lg);
+    margin-bottom: 0;
+}
+
+.trader-card {
+    text-align: left;
+}
+
+.trader-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-sm);
+}
+
+.pnl-badge {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: var(--text-sm);
+    padding: 2px var(--space-xs);
+    border-radius: var(--radius-sm);
+}
+
+.pnl-up {
+    color: #16a34a;
+    background: rgba(22, 163, 74, 0.12);
+}
+
+.pnl-down {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.12);
+}
+
+.sparkline {
+    width: 100%;
+    height: 2.5rem;
+    margin: var(--space-sm) 0;
+}
+
+.sparkline polyline {
+    fill: none;
+    stroke: var(--accent-primary);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.trader-stats {
+    display: flex;
+    gap: var(--space-lg);
+    margin: var(--space-sm) 0;
+}
+
+.trader-stats dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.trader-stats dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+
+.trait-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin: var(--space-sm) 0;
+}
+
+.trait-badges span {
+    font-size: var(--text-xs);
+    padding: 2px var(--space-xs);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+.hash-chip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-xs);
+    display: inline-block;
+    margin-top: var(--space-xs);
+}
+
+/* ── mobile nav: hamburger + dropdown panel ────────────────── */
+.nav-burger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    padding: var(--space-xs);
+    cursor: pointer;
+}
+
+.nav-burger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--text-primary);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+@media (max-width: 768px) {
+    .nav-burger {
+        display: flex;
+    }
+
+    /* with the links hidden, space-between would strand the toggle mid-bar */
+    .theme-toggle {
+        margin-left: auto;
+    }
+
+    .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        gap: 0;
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: var(--shadow-lg);
+        padding: var(--space-xs) var(--container-padding) var(--space-sm);
+        font-size: var(--text-base);
+    }
+
+    .nav.nav-open .nav-links {
+        display: flex;
+    }
+
+    .nav-links a {
+        display: block;
+        padding: var(--space-sm) 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-links li:last-child a {
+        border-bottom: none;
+    }
+
+    .nav.nav-open .nav-burger span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+    }
+
+    .nav.nav-open .nav-burger span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .nav.nav-open .nav-burger span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-burger span {
+        transition: none;
+    }
+}
+
+/* the spellcheck squiggle: the misspelling is load-bearing, mark it as such */
+.sic {
+    text-decoration: underline wavy #dc2626;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.2em;
+    text-decoration-skip-ink: none;
+}

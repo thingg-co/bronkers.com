@@ -1,0 +1,37 @@
+{
+  "generatedAtBlock": 13,
+  "traders": [
+    {
+      "tokenId": 1,
+      "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "account": "0x22BD7224db403fA246d96581097BA83e10A189d1",
+      "vault": "0x8dAF17A20c9DBA35f005b6324F493785D239719d",
+      "commitment": "0x95b2eb76b12119a0b19ee0b331cf4073a892ff2550f5de1bab64f1887858decf",
+      "birthBlock": 4,
+      "model": "claude-sonnet-5",
+      "riskProfile": 1,
+      "custody": "sealed-generated",
+      "seasoned": true,
+      "nav": "10000",
+      "tradeCount": 2,
+      "trades": [
+        {
+          "block": 11,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "amountIn": "50",
+          "amountOut": "0.025",
+          "fromVault": false
+        },
+        {
+          "block": 13,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "amountIn": "500",
+          "amountOut": "0.25",
+          "fromVault": true
+        }
+      ]
+    }
+  ]
+}

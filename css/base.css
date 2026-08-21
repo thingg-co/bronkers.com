@@ -1,0 +1,178 @@
+/* Main Styles - Golden Ratio Design System */
+
+/* Golden ratio constant: 1.618 */
+/* Spacing scale based on golden ratio: 1, 1.618, 2.618, 4.236, 6.854, 11.09, 17.944 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Golden ratio spacing scale - fluid and responsive */
+    --space-xs: clamp(0.5rem, 1vw, 0.618rem);           /* 8px - 10px */
+    --space-sm: clamp(0.809rem, 1.5vw, 1rem);           /* 13px - 16px */
+    --space-md: clamp(1.309rem, 2vw, 1.618rem);         /* 21px - 26px */
+    --space-lg: clamp(2.118rem, 3vw, 2.618rem);         /* 34px - 42px */
+    --space-xl: clamp(3.427rem, 4vw, 4.236rem);         /* 55px - 68px */
+    --space-2xl: clamp(4.236rem, 5vw, 5.236rem);        /* 68px - 84px */
+    --space-3xl: clamp(5.545rem, 6.5vw, 6.854rem);      /* 89px - 110px */
+
+    /* Typography scale - fluid and responsive */
+    --text-xs: clamp(0.618rem, 0.8vw, 0.75rem);         /* 10px - 12px */
+    --text-sm: clamp(0.875rem, 1vw, 0.95rem);           /* 14px - 15px */
+    --text-base: clamp(1rem, 1.2vw, 1.125rem);          /* 16px - 18px */
+    --text-lg: clamp(1.125rem, 1.4vw, 1.309rem);        /* 18px - 21px */
+    --text-xl: clamp(1.309rem, 1.8vw, 1.618rem);        /* 21px - 26px */
+    --text-2xl: clamp(1.618rem, 2.5vw, 2.118rem);       /* 26px - 34px */
+    --text-3xl: clamp(2.618rem, 4vw, 3.427rem);         /* 42px - 55px */
+    --text-4xl: clamp(4.236rem, 6vw, 5.545rem);         /* 68px - 89px */
+
+    /* Container widths */
+    --container-sm: 640px;
+    --container-md: 768px;
+    --container-lg: 1024px;
+    --container-xl: 1280px;
+
+    /* Responsive container padding */
+    --container-padding: clamp(1rem, 4vw, 2.618rem);
+
+    /* Border radius - fluid */
+    --radius-sm: clamp(0.25rem, 0.3vw, 0.309rem);
+    --radius-md: clamp(0.5rem, 0.6vw, 0.618rem);
+    --radius-lg: clamp(0.809rem, 1vw, 1rem);
+    --radius-xl: clamp(1.309rem, 1.5vw, 1.618rem);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-size: var(--text-base);
+    line-height: 1.618;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Container */
+.container {
+    max-width: var(--container-xl);
+    margin: 0 auto;
+    padding-left: var(--container-padding);
+    padding-right: var(--container-padding);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+}
+
+h1 {
+    font-size: var(--text-4xl);
+    margin-bottom: var(--space-lg);
+}
+
+h2 {
+    font-size: var(--text-3xl);
+    margin-bottom: var(--space-md);
+}
+
+h3 {
+    font-size: var(--text-2xl);
+    margin-bottom: var(--space-sm);
+}
+
+h4 {
+    font-size: var(--text-xl);
+    margin-bottom: var(--space-sm);
+}
+
+p {
+    margin-bottom: var(--space-md);
+    color: var(--text-secondary);
+}
+
+.lead {
+    font-size: var(--text-xl);
+    line-height: 1.618;
+    color: var(--text-secondary);
+}
+
+/* Links */
+a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    transition: color var(--transition-speed) ease;
+}
+
+a:hover {
+    color: var(--accent-primary-hover);
+}
+
+/* Sections */
+.section {
+    padding: var(--space-2xl) 0;
+}
+
+.section-title {
+    text-align: center;
+    margin-bottom: var(--space-xl);
+}
+
+.page-header {
+    padding: var(--space-2xl) 0 var(--space-xl);
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-subtitle {
+    font-size: var(--text-xl);
+    color: var(--text-tertiary);
+    margin-top: var(--space-md);
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+    h1 {
+        font-size: var(--text-3xl);
+    }
+
+    h2 {
+        font-size: var(--text-2xl);
+    }
+
+    .section {
+        padding: var(--space-xl) 0;
+    }
+}
+
+/* Lists */
+ul, ol {
+    margin-bottom: var(--space-md);
+    padding-left: var(--space-lg);
+}
+
+li {
+    margin-bottom: var(--space-xs);
+    color: var(--text-secondary);
+}
+
+/* Utilities */
+.text-center {
+    text-align: center;
+}
+
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--space-xs); }
+.mb-2 { margin-bottom: var(--space-sm); }
+.mb-3 { margin-bottom: var(--space-md); }
+.mb-4 { margin-bottom: var(--space-lg); }
+.mb-5 { margin-bottom: var(--space-xl); }
+
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--space-xs); }
+.mt-2 { margin-top: var(--space-sm); }
+.mt-3 { margin-top: var(--space-md); }
+.mt-4 { margin-top: var(--space-lg); }
+.mt-5 { margin-top: var(--space-xl); }
