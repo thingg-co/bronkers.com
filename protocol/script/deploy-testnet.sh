@@ -21,6 +21,7 @@ if [ -z "${DCAP_ATTESTATION:-}" ] && [ "$(cast code --rpc-url "$RPC" $AUTOMATA_D
 fi
 export RUNTIME_FEE_DELAY=${RUNTIME_FEE_DELAY:-86400}   # fee raises take a day to bite on a public testnet
 export REVISION_NOTICE=${REVISION_NOTICE:-86400}       # a revised genome waits a day (and spars) before it trades the vault
+export REAP_DELAY=${REAP_DELAY:-2592000}               # a dead brain idle 30 days may be reaped or culled
 # the paper venue quotes from Chainlink where it exists; Polygon Amoy feeds (8 decimals, 120 s heartbeat)
 if [ "$CHAIN" = "80002" ]; then
   export ETH_USD_FEED=${ETH_USD_FEED:-0xF0d50568e3A7e8259E16663972b11910F89BD8e7}

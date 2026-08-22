@@ -81,8 +81,9 @@ struct Genome {
   generation (the one current at its block), nothing is backfilled, and a revision is
   always committed before it trades; `generationOf(id)` is the current index and
   `tokenURI` carries it as a trait.
-- `MAX_SUPPLY = 4096` — the collection is hard-capped ("one brain per bit"); mint
-  reverts once `nextId` reaches it.
+- `MAX_SUPPLY = 4096` — at most 4,096 **live** brains ("one brain per bit"); mint
+  reverts once `nextId - burnedCount` reaches it. `revise` aside, a brain that goes
+  broke can be reaped, freeing a slot for a new, higher id (§2.2, Reaping).
 - `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)`,
   `cadenceOf(id)` — getters.
 - `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
@@ -99,6 +100,12 @@ struct Genome {
 - **Genomes are immutable per generation.** There is no path that changes what a past
   trade was made under; `revise` only appends. Provenance = every epoch of the record is
   tied to a commitment made before it began.
+- **Reaping.** `reapBurn(tokenId)` (guard-only) `_burn`s a dead brain, calls
+  `TraderVault.retire()` on its empty vault (no further deposits), bumps `burnedCount`
+  and emits `Reaped`. `mintFor(to, …)` (guard-only) lets `cullAndMint` mint atomically.
+  `liveSupply` = `nextId - burnedCount`; `exists(id)` is false after a reap. The burned
+  brain's `TradeExecuted` logs remain — its record is still recomputable — but its
+  `tokenURI`/`genomeOf` revert.
 
 ### 2.2 ExecutionGuard.sol (singleton, keyed by tokenId)
 
@@ -124,6 +131,18 @@ ceilings; deployer-tunable via `setTier`) bound each trader's `maxNotionalBps`.
 `activate(tokenId, tier)` is owner-only, upgrade-only, and pulls the tier's one-time
 fee in the base asset to the protocol `treasury`; `setPolicy` clamps to the seat's
 ceiling. Everyone mints as an Intern.
+
+**Reaping the dead.** A brain is `insolvent` when its vault has zero share supply (no
+LP shares, no unredeemed fee shares) and vault+own-book NAV `<= dustNav`; `reapable` when
+insolvent and idle since `policyOf.lastTradeAt` for `reapDelay` (so a brain that never
+traded, or is refunded and trading, is safe, and the owner has `reapDelay` from the last
+trade to refund — `reapableAt`). `reap(tokenId)` burns it free (permissionless);
+`cullAndMint(deadTokenId, …)` pays `cullFee` to the treasury and mints the caller's brain
+in the same transaction, so a reclaimed slot can't be sniped. Neither can touch a brain
+with shares or real capital, so a depositor is never stranded and an owner's swept
+capital or unredeemed fees are never destroyed. `setReap(reapDelay, cullFee, dustNav)`
+is deployer-level; `reapDelay = 0` disables it. This makes the supply cap "4,096 alive"
+rather than "4,096 ever."
 
 **Training camp.** A revised generation (`generationOf > 0`) may trade the own book at
 once but the vault only after `campMinTrades` own-book trades under that generation
@@ -439,6 +458,8 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
 | Operator runs brains at a loss and stops | per-brain credit; paused brains are told the covering fee; lease topped up from fees | same, with the lease on a market a bare key pays |
 | Fee sniping around transfer | fees accrue to TBA + checkpoint in transfer hook | same |
+| Griefing: reaping a live or dormant-but-wanted brain | reap/cull only touch a brain with zero shares and dust NAV, idle past `reapDelay`; the owner refunds to keep it | same, tunable delay |
+| A reclaimed slot sniped between burn and mint | `cullAndMint` burns and mints atomically for the payer | same |
 
 ## 8. Open questions
 
@@ -451,6 +472,9 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
   (Aug 2026) by generations: immutability per epoch, revisions committed before they
   trade, a training camp before the vault. Whether a sale should force (or forbid) a
   revision is still open.
+- Supply: resolved (Aug 2026) in favour of "4,096 alive" — dead brains are reaped after
+  an idle window, freeing slots, with ids never reused; the alternative "4,096 ever" is
+  gone. Open: whether reaping deserves a keeper bounty, and the cull-and-mint UI.
 - Cadence enforcement: resolved (Aug 2026) in favour of enforcing the declared trait
   on-chain as a floor under the owner's interval, which is what the paper promised and
   what bounds the runtime fee per day.

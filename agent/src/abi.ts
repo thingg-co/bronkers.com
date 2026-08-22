@@ -9,6 +9,8 @@ export const traderNftAbi = parseAbi([
   "function nameOf(uint256 tokenId) view returns (string)",
   "function cadenceOf(uint256 tokenId) view returns (uint8)",
   "function nextId() view returns (uint256)",
+  "function liveSupply() view returns (uint256)",
+  "function burnedCount() view returns (uint256)",
   "function revise(uint256 tokenId, bytes32 commitment, string model, string encryptedPromptCID)",
   "function generationOf(uint256 tokenId) view returns (uint32)",
   "function generationSince(uint256 tokenId, uint32 generation) view returns (uint64)",

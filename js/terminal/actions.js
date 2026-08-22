@@ -18,6 +18,8 @@ const REVERTS = [
   [/Guard: exceeds tier/, "That limit is above what this brain's seat allows."],
   [/Guard: token not curated|Guard: venue not curated/, "Only protocol-curated markets can be enabled."],
   [/Guard: in camp/, "This generation is still in training camp: it has to spar on the brain's own wallet (and wait out the notice period) before it may trade the vault."],
+  [/Guard: not reapable/, "This brain isn't reapable: it still holds capital or vault shares, or it hasn't been dead long enough. Reaping only ever burns an empty, abandoned brain."],
+  [/Vault: retired/, "This brain has been reaped; its vault is closed."],
   [/Trader: same genome/, "That is the genome the brain already has."],
   [/ERC20InsufficientAllowance|insufficient allowance/i, "The token approval is too small. Approve first."],
   [/ERC20InsufficientBalance|transfer amount exceeds balance|insufficient balance/i, "Not enough balance for that amount."],
@@ -151,6 +153,9 @@ export function enrol(id) {
   if (!ex) throw new Error("No enclave executor is configured for this chain (Developer tab).");
   return [{ label: "Enrol with the enclave (set its key as executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ex] }) }];
 }
+/** Reap a dead brain: burn it to free a slot. Anyone may; the guard checks it is genuinely dead and idle. */
+export const reap = (id) => [{ label: `Reap brain #${id} (free its slot)`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "reap", args: [BigInt(id)] }) }];
+
 export const unenrol = (id) => [{ label: "Unenrol (clear the executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ZERO] }) }];
 export const setRuntimeFee = (id, amountStr) => [{ label: `Set the runtime fee to ${amountStr} mUSDC per trade`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setRuntimeFee", args: [BigInt(id), parseUnits(amountStr || "0", 18)] }) }];
 

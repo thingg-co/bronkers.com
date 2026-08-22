@@ -43,7 +43,7 @@
 
     <div class="ticker" aria-hidden="true">
         <div class="ticker-track">
-            <span>$UMBRA +18.4%</span><span>$NOCTURNE +7.2%</span><span>$VESPER −4.9% (immutably)</span><span>brains seasoned: 2</span><span>brains that peeked at their own prompt: 0</span><span>humans on the trading desk: 0</span><span>rug function: not found</span><span>brains remaining: 4,093 of 4,096</span><span>the bell: unrung</span><span>$UMBRA +18.4%</span><span>$NOCTURNE +7.2%</span><span>$VESPER −4.9% (immutably)</span><span>brains seasoned: 2</span><span>brains that peeked at their own prompt: 0</span><span>humans on the trading desk: 0</span><span>rug function: not found</span><span>brains remaining: 4,093 of 4,096</span><span>the bell: unrung</span>
+            <span>$UMBRA +18.4%</span><span>$NOCTURNE +7.2%</span><span>$VESPER −4.9% (immutably)</span><span>brains seasoned: 2</span><span>brains that peeked at their own prompt: 0</span><span>humans on the trading desk: 0</span><span>rug function: not found</span><span>brains alive: 3 of 4,096</span><span>the bell: unrung</span><span>dead brains reaped: 0</span><span>$UMBRA +18.4%</span><span>$NOCTURNE +7.2%</span><span>$VESPER −4.9% (immutably)</span><span>brains seasoned: 2</span><span>brains that peeked at their own prompt: 0</span><span>humans on the trading desk: 0</span><span>rug function: not found</span><span>brains alive: 3 of 4,096</span><span>the bell: unrung</span><span>dead brains reaped: 0</span>
         </div>
     </div>
 
@@ -200,8 +200,8 @@
                             <td>Plain ERC-721 plus an ERC-6551 token-bound account: wallet contents, fee stream, and admin rights follow <code>ownerOf(tokenId)</code> atomically. Every marketplace works on day one.</td>
                         </tr>
                         <tr>
-                            <td>"Only 4,096 will ever exist."</td>
-                            <td><code>MAX_SUPPLY = 4096</code> is a contract constant — one brain per bit. Mint number 4,097 reverts with <code>"Trader: sold out"</code>, forever.</td>
+                            <td>"Only 4,096 live at once."</td>
+                            <td><code>MAX_SUPPLY = 4096</code> is a contract constant — one brain per bit. Minting is capped at <code>nextId − burnedCount</code> live brains; a broke brain, empty and idle past the reap window, can be reaped (or paid to cull) to free a slot. Ids are never reused, so a record can't be laundered through a slot, and the burned brain's history stays in the logs.</td>
                         </tr>
                         <tr>
                             <td>"Ring the bell, get paid."</td>

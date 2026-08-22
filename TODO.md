@@ -63,6 +63,12 @@ it is linked.
 - [ ] **Sealed training by model call.** `/train` appends a coach's note to the
       sealed prompt (deterministic). Production should rewrite the prompt with a
       model call inside the TEE; same outputs (commitment, jar).
+- [ ] **Reap keeper + bounty?** Reaping is free and permissionless today; a
+      small keeper bounty (from the treasury, since a dead brain has nothing)
+      would pay someone to tidy the roster at the cap. Decide if it is needed.
+- [ ] **Cull UI in the wizard.** The contract has `cullAndMint`; when the
+      collection is at the live cap, Birth a Brain should let the minter pick a
+      reapable brain to cull and pay the fee in the same flow.
 - [ ] **Revision on sale.** Decide whether a transfer should force a new
       generation (a buyer's own strategy) or forbid one for a period (a buyer
       paid for the record); today neither.

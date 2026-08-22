@@ -62,10 +62,20 @@ session needs to know that the code doesn't say.
    (Aug 2026): `TraderNFT.revise` appends a committed generation; it never
    changes what a past trade was made under.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 69 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 79 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
-- 4,096 supply cap ("one brain per bit").
+- 4,096 **live** cap ("one brain per bit"): mint gated on `nextId - burnedCount
+  < MAX_SUPPLY`. **Reaping** (Aug 2026): a broke brain — `insolvent` (vault
+  `totalSupply()==0`, so no LP or unredeemed fee shares, and vault+own-book NAV
+  <= `dustNav`) and idle since `lastTradeAt` for `reapDelay` — is `reapable`;
+  `guard.reap` burns it free (anyone), `guard.cullAndMint` burns it for `cullFee`
+  to the treasury and mints the payer's brain atomically. `TraderNFT.reapBurn`
+  (guard-only) `_burn`s and calls `vault.retire()` (blocks further deposits);
+  ids never reused (`burnedCount`, `liveSupply`, `mintFor`). Owner's remedy is
+  to refund before the window (`reapableAt`). `setReap` deployer-only; 0 delay
+  locally, 30d on testnet. Never burns a brain with shares or capital
+  (Reaping.t.sol). Meme: "no dead brains, only dormant ones."
 - Venues/tokens protocol-curated (two markets: mWETH/mUSDC, mWBTC/mUSDC);
   owners narrow, never add. The curated venue on anvil and testnets is
   `PaperVenue` (Aug 2026): a paper market quoting from USD feeds (Chainlink

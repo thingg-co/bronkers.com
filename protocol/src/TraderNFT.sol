@@ -52,7 +52,10 @@ contract TraderNFT is ERC721, ITraderNFT {
     IJarRenderer public immutable renderer; // tokenURI lives there to keep this contract under the size limit
     bytes32 public constant TBA_SALT = bytes32(0);
 
-    /// One brain per bit: the collection is hard-capped at 2^12.
+    /// One brain per bit: at most 2^12 living at once. Minting is capped at
+    /// MAX_SUPPLY live brains (nextId - burnedCount); a brain that goes broke
+    /// and stays dead can be reaped, freeing a slot for a new, higher id — the
+    /// old id is never reused, so a record cannot be laundered through a slot.
     uint256 public constant MAX_SUPPLY = 4096;
 
     /// One entry per generation: what was committed and when it became current.
@@ -64,7 +67,8 @@ contract TraderNFT is ERC721, ITraderNFT {
         uint64 sinceTime;
     }
 
-    uint256 public nextId;
+    uint256 public nextId; // total ever minted; ids are 1..nextId and never reused
+    uint256 public burnedCount; // reaped brains; live supply = nextId - burnedCount
     mapping(uint256 => Genome) private _genomes;
     mapping(uint256 => Generation[]) private _generations;
     mapping(uint256 => address) private _vaults;
@@ -81,6 +85,9 @@ contract TraderNFT is ERC721, ITraderNFT {
     /// A new generation: the brain trains between fights. Committed before it
     /// trades; the guard makes it spar on the own book before it touches the vault.
     event GenomeRevised(uint256 indexed tokenId, uint32 generation, bytes32 commitment, string model);
+    /// A dead brain reaped (its slot freed). The record survives in the logs;
+    /// the token no longer resolves.
+    event Reaped(uint256 indexed tokenId);
     /// The sealed genome envelope, published as calldata so the enclave can
     /// find it by scanning logs. It is ciphertext only the enclave key opens;
     /// the plaintext still never touches the chain.
@@ -117,12 +124,46 @@ contract TraderNFT is ERC721, ITraderNFT {
         uint16 managementFeeBps,
         uint16 performanceFeeBps
     ) external returns (uint256 tokenId) {
+        return _mintBrain(msg.sender, commitment, riskProfile, cadence, custody, model, encryptedPromptCID, universe, managementFeeBps, performanceFeeBps);
+    }
+
+    /// @notice Mint on someone's behalf. Guard-only: the guard uses it to burn
+    /// a dead brain and mint the caller's new one atomically (cullAndMint), so
+    /// a reclaimed slot cannot be sniped between the two.
+    function mintFor(
+        address to,
+        bytes32 commitment,
+        uint8 riskProfile,
+        uint8 cadence,
+        uint8 custody,
+        string calldata model,
+        string calldata encryptedPromptCID,
+        address[] calldata universe,
+        uint16 managementFeeBps,
+        uint16 performanceFeeBps
+    ) external returns (uint256 tokenId) {
+        require(msg.sender == address(guard), "Trader: not guard");
+        return _mintBrain(to, commitment, riskProfile, cadence, custody, model, encryptedPromptCID, universe, managementFeeBps, performanceFeeBps);
+    }
+
+    function _mintBrain(
+        address to,
+        bytes32 commitment,
+        uint8 riskProfile,
+        uint8 cadence,
+        uint8 custody,
+        string calldata model,
+        string calldata encryptedPromptCID,
+        address[] calldata universe,
+        uint16 managementFeeBps,
+        uint16 performanceFeeBps
+    ) internal returns (uint256 tokenId) {
         require(commitment != bytes32(0), "Trader: empty commitment");
         require(custody <= CUSTODY_SEALED_GENERATED, "Trader: bad custody");
         require(cadence > 0, "Trader: cadence"); // the guard divides a day by it
-        require(nextId < MAX_SUPPLY, "Trader: sold out");
+        require(nextId - burnedCount < MAX_SUPPLY, "Trader: sold out");
         tokenId = ++nextId;
-        _safeMint(msg.sender, tokenId);
+        _safeMint(to, tokenId);
 
         _genomes[tokenId] = Genome({
             commitment: commitment,
@@ -146,7 +187,30 @@ contract TraderNFT is ERC721, ITraderNFT {
 
         guard.initPolicy(tokenId, address(defaultVenue), universe);
 
-        emit TraderBorn(tokenId, msg.sender, commitment, account, address(vault));
+        emit TraderBorn(tokenId, to, commitment, account, address(vault));
+    }
+
+    /// @notice Reap a dead brain: burn the token, retire its (empty) vault, and
+    /// free a slot. Guard-only — the guard checks it is genuinely dead (no LP
+    /// or fee shares outstanding, dust NAV, and idle past the reap delay). The
+    /// TradeExecuted logs remain, so its record is still recomputable; the
+    /// token simply ceases to resolve.
+    function reapBurn(uint256 tokenId) external {
+        require(msg.sender == address(guard), "Trader: not guard");
+        burnedCount++;
+        TraderVault(_vaults[tokenId]).retire();
+        _burn(tokenId);
+        emit Reaped(tokenId);
+    }
+
+    /// @notice Living brains: minted minus reaped.
+    function liveSupply() external view returns (uint256) {
+        return nextId - burnedCount;
+    }
+
+    /// @notice Whether a token currently exists (false once reaped).
+    function exists(uint256 tokenId) external view returns (bool) {
+        return _ownerOf(tokenId) != address(0);
     }
 
     function genomeOf(uint256 tokenId) external view returns (Genome memory) {

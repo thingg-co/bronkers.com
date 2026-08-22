@@ -12,6 +12,19 @@ interface ITraderNFT {
     /// generation became current; the guard keys its training camp on them.
     function generationOf(uint256 tokenId) external view returns (uint32);
     function generationSince(uint256 tokenId, uint32 generation) external view returns (uint64);
+    function reapBurn(uint256 tokenId) external;
+    function mintFor(
+        address to,
+        bytes32 commitment,
+        uint8 riskProfile,
+        uint8 cadence,
+        uint8 custody,
+        string calldata model,
+        string calldata encryptedPromptCID,
+        address[] calldata universe,
+        uint16 managementFeeBps,
+        uint16 performanceFeeBps
+    ) external returns (uint256);
 }
 
 /// @notice What the guard asks the RuntimeRegistry: is this executor key

@@ -37,6 +37,7 @@ export function jar(b) {
 }
 
 export function statusBadge(b) {
+  if (b.reapable) return badge("dead · reapable", "bad");
   if (b.inCamp) return badge(`in camp · gen ${b.generation}`, "accent");
   if (b.seasoned) return badge("seasoned", "good");
   return badge("intern", "muted");
@@ -107,12 +108,12 @@ export async function render(root) {
   const brains = roster.brains.slice();
   const note = snapshot
     ? `Snapshot from block ${roster.generatedAtBlock} (chain unreachable). Numbers are as of that block.`
-    : `${roster.count} of ${roster.max.toLocaleString()} brains minted · live from ${state.cfg.name}, block ${state.blockNumber ?? "?"}`;
+    : `${roster.live == null ? roster.count : roster.live} of ${roster.max.toLocaleString()} brains alive${roster.burned ? ` · ${roster.burned} reaped` : ""} · live from ${state.cfg.name}, block ${state.blockNumber ?? "?"}`;
 
   const sortSel = el("select", { class: "select", onchange: (e) => { prefs.sort = e.target.value; localStorage.setItem("brokners-floor-sort", prefs.sort); draw(); } },
     Object.entries(SORTS).map(([k, v]) => el("option", { value: k, selected: prefs.sort === k }, v.label)));
   const filterSel = el("select", { class: "select", onchange: (e) => { prefs.filter = e.target.value; localStorage.setItem("brokners-floor-filter", prefs.filter); draw(); } },
-    [["all", "All brains"], ["open", "Taking deposits"], ["intern", "Interns"], ["mine", "Mine"], ["bell", "Bell worth ringing"]].map(([k, l]) => el("option", { value: k, selected: prefs.filter === k }, l)));
+    [["all", "All brains"], ["open", "Taking deposits"], ["intern", "Interns"], ["mine", "Mine"], ["bell", "Bell worth ringing"], ["reapable", "Dead (reapable)"]].map(([k, l]) => el("option", { value: k, selected: prefs.filter === k }, l)));
   head.append(
     el("p", { class: "roster-note" }, note),
     el("div", { class: "toolbar" },
@@ -126,6 +127,7 @@ export async function render(root) {
       if (prefs.filter === "intern") return !b.seasoned;
       if (prefs.filter === "mine") return b.mine;
       if (prefs.filter === "bell") return ringable(b);
+      if (prefs.filter === "reapable") return b.reapable;
       return true;
     });
     list.sort(SORTS[prefs.sort].fn);

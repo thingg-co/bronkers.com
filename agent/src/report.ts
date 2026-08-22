@@ -16,7 +16,11 @@ const extraNftAbi = parseAbi([
   "function nameOf(uint256) view returns (string)",
   "function generationOf(uint256) view returns (uint32)",
 ]);
-const extraGuardAbi = parseAbi(["function tierOf(uint256) view returns (uint8)"]);
+const extraGuardAbi = parseAbi([
+  "function tierOf(uint256) view returns (uint8)",
+  "function reapable(uint256) view returns (bool)",
+  "function reapableAt(uint256) view returns (uint64)",
+]);
 const extraVaultAbi = parseAbi(["function convertToAssets(uint256) view returns (uint256)"]);
 const erc20SymbolAbi = parseAbi(["function symbol() view returns (string)"]);
 
@@ -51,6 +55,10 @@ for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
     publicClient.readContract({ address: guard, abi: extraGuardAbi, functionName: "tierOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "generationOf", args: [tokenId] }),
   ]);
+  const [reapable, reapableAt] = await Promise.all([
+    publicClient.readContract({ address: guard, abi: extraGuardAbi, functionName: "reapable", args: [tokenId] }),
+    publicClient.readContract({ address: guard, abi: extraGuardAbi, functionName: "reapableAt", args: [tokenId] }),
+  ]);
   const [nav, pps, seasoned, logs, feeLogs, runtimeFee] = await Promise.all([
     publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "totalAssets" }),
     publicClient.readContract({ address: vault, abi: extraVaultAbi, functionName: "convertToAssets", args: [WAD] }),
@@ -81,6 +89,8 @@ for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
     vault,
     commitment: genome.commitment,
     generation: Number(generation),
+    reapable,
+    reapableAt: Number(reapableAt),
     birthBlock: Number(genome.birthBlock),
     model: genome.model,
     riskProfile: genome.riskProfile,

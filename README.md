@@ -20,7 +20,7 @@ app.html        The Terminal — zero-build dapp (viem via CDN, NO backend:
 css/brokners.css  the single stylesheet every page loads (no inline styles)
 js/config.js    per-chain contract addresses for the Terminal
 docs/           whitepaper (md + styled html) + architecture
-protocol/       Foundry — TraderNFT (genome commitment, 4,096 cap, ERC-6551
+protocol/       Foundry — TraderNFT (genome commitment, 4,096-live cap + reaping, ERC-6551
                 wallet), TraderVault (4626, fees to the brain's own wallet,
                 Ring the Bell), ExecutionGuard (curated venues, seat tiers,
                 paper season, slippage/notional/cadence bounds), mocks

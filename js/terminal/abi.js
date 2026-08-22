@@ -5,6 +5,9 @@ export const nftAbi = parseAbi([
   "struct Genome { bytes32 commitment; uint64 birthBlock; uint8 riskProfile; uint8 cadence; uint8 custody; string model; string encryptedPromptCID; }",
   "function nextId() view returns (uint256)",
   "function MAX_SUPPLY() view returns (uint256)",
+  "function liveSupply() view returns (uint256)",
+  "function burnedCount() view returns (uint256)",
+  "function cullAndMint(uint256,bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
   "function genomeOf(uint256) view returns (Genome)",
   "function ownerOf(uint256) view returns (address)",
   "function vaultOf(uint256) view returns (address)",
@@ -23,6 +26,7 @@ export const nftAbi = parseAbi([
   "event Christened(uint256 indexed tokenId, string name)",
   "event EnvelopePublished(uint256 indexed tokenId, bytes envelope)",
   "event GenomeRevised(uint256 indexed tokenId, uint32 generation, bytes32 commitment, string model)",
+  "event Reaped(uint256 indexed tokenId)",
 ]);
 
 export const guardAbi = parseAbi([
@@ -49,6 +53,13 @@ export const guardAbi = parseAbi([
   "function minFeeNotionalBps() view returns (uint16)",
   "function registry() view returns (address)",
   "function campStatus(uint256) view returns (uint32 generation, bool inCamp, uint32 trades, uint32 minTrades, uint64 vaultFrom)",
+  "function reapable(uint256) view returns (bool)",
+  "function reapableAt(uint256) view returns (uint64)",
+  "function insolvent(uint256) view returns (bool)",
+  "function reapDelay() view returns (uint64)",
+  "function cullFee() view returns (uint256)",
+  "function reap(uint256)",
+  "event Reaped(uint256 indexed tokenId, address indexed reaper)",
   "function cadenceIntervalOf(uint256) view returns (uint64)",
   "function tradeIntervalOf(uint256) view returns (uint64)",
   "function nextTradeAt(uint256) view returns (uint64)",

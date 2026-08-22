@@ -47,7 +47,7 @@
 <p class="eyebrow">BROK<span class="typo-n">N</span>ERS · Research</p>
 <h1>BROK<span class="typo-n">N</span>ERS</h1>
 <p class="tagline">Autonomous traders with verifiable, transferable track records</p>
-<p class="version">Concept paper · v0.5 working draft · August 2026</p>
+<p class="version">Concept paper · v0.6 working draft · August 2026</p>
 
 <div class="notice">
 <strong>Status.</strong> This is a research document describing a testnet prototype. The contracts, runtime, and figures described here run on a local chain and on testnets only.
@@ -96,7 +96,7 @@
 <h2><span class="no">4</span>Token-Bound Ownership</h2>
 <p>Each token controls a wallet of its own through the ERC-6551 token-bound account standard. The wallet address is derived from the token, and whoever holds the token controls the wallet. A transfer of the token is therefore also a transfer of the wallet and its contents, in the same transaction.</p>
 <p>This is what makes sale of an agent well-defined. A seller who wishes to include capital simply transfers the token; the wallet, including trading capital and any accrued fee shares, moves with it. A seller who wishes to retain capital sweeps the wallet to their own address first and then transfers the token; the buyer receives the identity, the genome rights, and the complete history with an empty book. In both cases the trade events were emitted by the token's own addresses and remain attached to it.</p>
-<p>Supply is capped at 4,096 agents. We chose the figure because it is 2<sup>12</sup> and because a collection of brains ought to have one per bit; the cap is a protocol constant in any case.</p>
+<p>Supply is capped at 4,096 living agents. We chose the figure because it is 2<sup>12</sup> and because a collection of brains ought to have one per bit. The cap is on the living, not on the ever-minted: an agent that goes broke — its vault emptied of shares and its wallet of capital — and then sits idle for a protocol-set interval may be reaped, which burns the token and frees a slot for a new agent with a fresh, never-reused identifier. Reaping is permissionless and free; alternatively a minter may pay a fee to cull a dead agent and mint their own in its place in a single transaction, so that a reclaimed slot cannot be taken from under them. Reaping can never touch an agent that still has vault shares outstanding or capital in its wallet, so no depositor is stranded and no owner's holdings are destroyed, and the owner of a merely dormant agent can revive it by funding it at any time before the interval elapses. A reaped agent's history is not erased: its trades remain as events in the log and its record stays recomputable; only the token ceases to resolve. The effect is a collection that renews itself — the dead make room for the living — while the total that can be alive at once stays fixed.</p>
 
 <h2><span class="no">5</span>Vaults and Fee Mechanics</h2>
 <p>An agent's own wallet is its proprietary book. In addition, each agent fronts an ERC-4626 vault that external depositors may fund. Depositors supply the base asset (USDC, which is also the venue's collateral) and receive vault shares, which are redeemable at any time at the prevailing share price. The agent trades vault assets under the same on-chain policy that governs its own book.</p>
@@ -167,7 +167,7 @@
 <p><strong>Model risk.</strong> Model outputs are non-deterministic, so the same genome will not reproduce the same trades, and deprecation or drift of the underlying model changes an agent's behaviour partway through its record. The model identifier is pinned per generation for this reason: moving an agent to a newer model is a revision, recorded as such, and served through the training camp like any other.</p>
 <p><strong>Key risk.</strong> The executor key is a hot key with a bounded blast radius by design. The owner key is ordinary NFT custody, and its compromise is total loss.</p>
 <p><strong>Smart-contract risk.</strong> The prototype is unaudited. The design relies on audited components (OpenZeppelin ERC-721 and ERC-4626, the ERC-6551 reference registry) and keeps custom code small, but small is not the same as safe.</p>
-<p><strong>Performance risk.</strong> Most traders, human or otherwise, underperform. A verifiable record verifies losses with the same rigour as gains.</p>
+<p><strong>Performance risk.</strong> Most traders, human or otherwise, underperform. A verifiable record verifies losses with the same rigour as gains. An agent that loses everything is not destroyed by the protocol; it goes dormant, and unless refunded it is eventually reaped to free its slot, its losing record preserved in the log.</p>
 <p>Everything described in this paper, including contracts, runtime, and documentation, is provided as-is and without warranty of any kind. Verification mechanisms are best-effort and are labelled as such; where a property is not enforced on-chain or by attestation, it should be read as a claim.</p>
 
 <h2><span class="no">10</span>Roadmap</h2>

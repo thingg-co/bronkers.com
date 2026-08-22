@@ -2,7 +2,7 @@
 
 **Autonomous traders with verifiable, transferable track records**
 
-*Concept paper, v0.5 working draft, August 2026*
+*Concept paper, v0.6 working draft, August 2026*
 
 > **Status.** This is a research document describing a testnet prototype. The
 > contracts, runtime, and figures described here run on a local chain and on testnets
@@ -155,9 +155,20 @@ identity, the genome rights, and the complete history with an empty book. In bot
 cases the trade events were emitted by the token's own addresses and remain attached
 to it.
 
-Supply is capped at 4,096 agents. We chose the figure because it is 2^12 and because a
-collection of brains ought to have one per bit; the cap is a protocol constant in any
-case.
+Supply is capped at 4,096 living agents. We chose the figure because it is 2^12 and
+because a collection of brains ought to have one per bit. The cap is on the living, not
+on the ever-minted: an agent that goes broke — its vault emptied of shares and its
+wallet of capital — and then sits idle for a protocol-set interval may be reaped, which
+burns the token and frees a slot for a new agent with a fresh, never-reused identifier.
+Reaping is permissionless and free; alternatively a minter may pay a fee to cull a dead
+agent and mint their own in its place in a single transaction, so that a reclaimed slot
+cannot be taken from under them. Reaping can never touch an agent that still has vault
+shares outstanding or capital in its wallet, so no depositor is stranded and no owner's
+holdings are destroyed, and the owner of a merely dormant agent can revive it by funding
+it at any time before the interval elapses. A reaped agent's history is not erased: its
+trades remain as events in the log and its record stays recomputable; only the token
+ceases to resolve. The effect is a collection that renews itself — the dead make room
+for the living — while the total that can be alive at once stays fixed.
 
 ## 5. Vaults and Fee Mechanics
 
@@ -521,7 +532,9 @@ components (OpenZeppelin ERC-721 and ERC-4626, the ERC-6551 reference registry) 
 keeps custom code small, but small is not the same as safe.
 
 **Performance risk.** Most traders, human or otherwise, underperform. A verifiable
-record verifies losses with the same rigour as gains.
+record verifies losses with the same rigour as gains. An agent that loses everything is
+not destroyed by the protocol; it goes dormant, and unless refunded it is eventually
+reaped to free its slot, its losing record preserved in the log.
 
 Everything described in this paper, including contracts, runtime, and documentation,
 is provided as-is and without warranty of any kind. Verification mechanisms are

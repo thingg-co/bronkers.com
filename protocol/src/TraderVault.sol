@@ -35,6 +35,10 @@ contract TraderVault is ERC4626 {
     uint256 public highWaterMark = WAD; // assets per share, 1e18-scaled
     uint64 public lastCheckpoint;
 
+    /// Set once, by the NFT, when the brain is reaped: the vault is empty and
+    /// its brain no longer exists, so it accepts no further deposits.
+    bool public retired;
+
     /// Compliance hook: deposits are gated by default (see whitepaper §9).
     bool public allowlistEnabled = true;
     mapping(address => bool) public depositAllowed;
@@ -112,7 +116,14 @@ contract TraderVault is ERC4626 {
         emit AllowlistEnabledSet(enabled);
     }
 
+    /// @notice Called by the NFT when the brain is reaped; deposits stop.
+    function retire() external {
+        require(msg.sender == address(nft), "Vault: not nft");
+        retired = true;
+    }
+
     function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
+        require(!retired, "Vault: retired");
         require(!allowlistEnabled || depositAllowed[caller], "Vault: depositor not allowed");
         // paper season: no outside capital until the trader has built a
         // minimum track record on its own book

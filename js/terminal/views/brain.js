@@ -138,6 +138,18 @@ function bellModal(brain, refresh) {
   ] });
 }
 
+function reapPanel(brain, refresh) {
+  if (!brain.reapable && !brain.insolventDead) return null;
+  const now = brain.runtime ? brain.runtime.now : Math.floor(Date.now() / 1000);
+  return el("div", { class: "panel" },
+    el("h4", {}, "Dead brain"),
+    el("p", { class: "muted" }, "This brain is broke: no vault shares outstanding and nothing left in its wallet. ",
+      brain.reapable
+        ? "It has been idle past the reap window, so anyone may reap it — burning the token and freeing a slot for a new brain. Its record stays in the logs; only the token stops resolving. The owner can still revive it by funding its wallet before it is reaped."
+        : brain.reapableAt && brain.reapableAt > now ? ["It becomes reapable in about ", el("strong", {}, fmt.duration(brain.reapableAt - now)), ". Fund its wallet before then to keep it."] : "Fund its wallet to revive it."),
+    brain.reapable ? el("div", { class: "btn-row" }, el("button", { class: "btn danger", disabled: !state.account, onclick: async () => { const ok = await act.runSteps("Reap", act.reap(brain.id)); if (ok) location.hash = "#/"; } }, "Reap it (free the slot)")) : null);
+}
+
 function actionsPanel(brain, refresh) {
   const btns = [];
   const connected = Boolean(state.account);
@@ -237,6 +249,7 @@ export async function render(root, { id }) {
     chart(brain),
     internship(brain),
     camp(brain),
+    reapPanel(brain, refresh),
     actionsPanel(brain, refresh),
     el("h3", { class: "section-sub" }, "Track record"),
     el("p", { class: "muted" }, "Every row is a ", el("code", {}, "TradeExecuted"), " event from the guard. Recompute it yourself; this page only summarises.", brain.transcripts ? ` ${brain.transcripts} of ${brain.trades.length} trades carry a transcript hash: the runtime's evidence of what the model saw and decided, checkable against a disclosed transcript.` : ""),

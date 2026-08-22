@@ -83,7 +83,7 @@ export async function seasonParams() {
 export async function summary(id) {
   id = BigInt(id);
   const { traderNFT, guard } = state.cfg;
-  const [genome, owner, name, vault, tba, tier, seasoned, tradeCount, firstTradeAt, camp] = await Promise.all([
+  const [genome, owner, name, vault, tba, tier, seasoned, tradeCount, firstTradeAt, camp, reapableFlag, reapAt] = await Promise.all([
     read(traderNFT, nftAbi, "genomeOf", [id]),
     read(traderNFT, nftAbi, "ownerOf", [id]),
     read(traderNFT, nftAbi, "nameOf", [id]),
@@ -94,6 +94,8 @@ export async function summary(id) {
     read(guard, guardAbi, "tradeCountOf", [id]),
     read(guard, guardAbi, "firstTradeAt", [id]),
     read(guard, guardAbi, "campStatus", [id]).catch(() => [0, false, 0, 0, 0n]),
+    read(guard, guardAbi, "reapable", [id]).catch(() => false),
+    read(guard, guardAbi, "reapableAt", [id]).catch(() => 0n),
   ]);
   const me = state.account;
   const [nav, supply, pps, tbaNav, pending, myShares] = await Promise.all([
@@ -122,6 +124,10 @@ export async function summary(id) {
     generation: Number(camp[0]),
     inCamp: Boolean(camp[1]),
     camp: { trades: Number(camp[2]), minTrades: Number(camp[3]), vaultFrom: Number(camp[4]) },
+    // a broke brain, idle past the reap delay, can be burned to free a slot
+    reapable: Boolean(reapableFlag),
+    reapableAt: Number(reapAt),
+    insolventDead: Boolean(reapAt) && !reapableFlag,
     nav,
     supply,
     pps, // assets per 1e18 shares
@@ -136,14 +142,16 @@ export async function summary(id) {
 export async function loadRoster({ force } = {}) {
   if (cache.roster && !force) return cache.roster;
   const { traderNFT } = state.cfg;
-  const [nextId, maxSupply] = await Promise.all([
+  const [nextId, maxSupply, liveSupply, burnedCount] = await Promise.all([
     read(traderNFT, nftAbi, "nextId"),
     read(traderNFT, nftAbi, "MAX_SUPPLY"),
+    read(traderNFT, nftAbi, "liveSupply").catch(() => null),
+    read(traderNFT, nftAbi, "burnedCount").catch(() => 0n),
   ]);
   const ids = [];
   for (let i = 1n; i <= nextId; i++) ids.push(i);
   const brains = await Promise.all(ids.map((i) => limit(() => summary(i))));
-  cache.roster = { count: Number(nextId), max: Number(maxSupply), brains };
+  cache.roster = { count: Number(nextId), max: Number(maxSupply), live: liveSupply == null ? null : Number(liveSupply), burned: Number(burnedCount), brains };
   return cache.roster;
 }
 

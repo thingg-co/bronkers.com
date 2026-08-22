@@ -53,6 +53,18 @@ contract ExecutionGuard is ReentrancyGuard {
     uint64 public revisionNotice;
     mapping(uint256 => mapping(uint32 => uint32)) public campTradesOf; // tokenId -> generation -> own-book trades
 
+    /// Reaping the dead. A brain is dead when its vault holds no shares (no LP
+    /// or unredeemed fee shares — burning either would strand someone) and its
+    /// NAV (vault + own book) is at or below dustNav. A dead brain that has not
+    /// traded for reapDelay may be reaped by anyone (free), which burns it and
+    /// frees a supply slot; or culled by paying cullFee to the treasury, which
+    /// burns it and mints the payer's new brain in the same transaction, so a
+    /// reclaimed slot cannot be sniped. The owner's remedy is to refund the
+    /// brain (which lifts its NAV above dust) any time before it is reaped.
+    uint64 public reapDelay;
+    uint256 public cullFee;
+    uint256 public dustNav;
+
     /// Seat tiers: a brain's tier sets the ceiling of its trading policy.
     /// Everyone mints as an Intern; upgrades cost a one-time fee in the base
     /// asset, paid to the protocol treasury. Tier is mechanical, not
@@ -122,6 +134,9 @@ contract ExecutionGuard is ReentrancyGuard {
     event TokenCurated(address indexed token, bool curated);
     event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee);
     event CampConfigured(uint32 minTrades, uint64 notice);
+    event ReapConfigured(uint64 reapDelay, uint256 cullFee, uint256 dustNav);
+    event Reaped(uint256 indexed tokenId, address indexed reaper);
+    event Culled(uint256 indexed deadTokenId, address indexed payer, uint256 newTokenId, uint256 fee);
     event TierConfigured(uint8 tier, uint16 maxNotionalBps, uint256 fee);
     event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee);
     event RuntimeFeeScheduled(uint256 indexed tokenId, uint256 fee, uint64 effectiveAt);
@@ -166,6 +181,15 @@ contract ExecutionGuard is ReentrancyGuard {
         campMinTrades = minTrades;
         revisionNotice = notice;
         emit CampConfigured(minTrades, notice);
+    }
+
+    /// @notice Reaping parameters (deployer-level).
+    function setReap(uint64 reapDelay_, uint256 cullFee_, uint256 dustNav_) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        reapDelay = reapDelay_;
+        cullFee = cullFee_;
+        dustNav = dustNav_;
+        emit ReapConfigured(reapDelay_, cullFee_, dustNav_);
     }
 
     function setTreasury(address treasury_) external {
@@ -461,6 +485,63 @@ contract ExecutionGuard is ReentrancyGuard {
             if (first == 0 || block.timestamp < first + seasonDuration) return false;
         }
         return true;
+    }
+
+    /// @notice Is this brain dead? No vault shares outstanding (no LP or
+    /// unredeemed fee shares) and NAV at or below dust. A brain with any shares
+    /// or real capital is never dead, so reaping can never strand a depositor
+    /// or destroy an owner's unredeemed fees or swept capital.
+    function insolvent(uint256 tokenId) public view returns (bool) {
+        TraderVault vault = TraderVault(nft.vaultOf(tokenId));
+        if (vault.totalSupply() > 0) return false;
+        return vault.totalAssets() + tbaNav(tokenId) <= dustNav;
+    }
+
+    /// @notice May this brain be reaped now: dead, and idle for reapDelay since
+    /// its last trade (a brain that never traded, or is refunded and trading,
+    /// is safe). reapDelay 0 disables reaping entirely.
+    function reapable(uint256 tokenId) public view returns (bool) {
+        if (reapDelay == 0) return false;
+        uint64 last = policyOf[tokenId].lastTradeAt;
+        if (last == 0 || block.timestamp < last + reapDelay) return false;
+        return insolvent(tokenId);
+    }
+
+    /// @notice When a dead brain becomes reapable (0 if it never traded or is not dead).
+    function reapableAt(uint256 tokenId) external view returns (uint64) {
+        uint64 last = policyOf[tokenId].lastTradeAt;
+        if (reapDelay == 0 || last == 0 || !insolvent(tokenId)) return 0;
+        return last + reapDelay;
+    }
+
+    /// @notice Reap a dead brain: free (anyone), burns it, frees a slot.
+    function reap(uint256 tokenId) external nonReentrant {
+        require(reapable(tokenId), "Guard: not reapable");
+        nft.reapBurn(tokenId);
+        emit Reaped(tokenId, msg.sender);
+    }
+
+    /// @notice Pay to reclaim a dead brain's slot and mint your own in its
+    /// place, atomically. Same eligibility as reap (the owner's refund window
+    /// is respected); cullFee goes to the treasury.
+    function cullAndMint(
+        uint256 deadTokenId,
+        bytes32 commitment,
+        uint8 riskProfile,
+        uint8 cadence,
+        uint8 custody,
+        string calldata model,
+        string calldata encryptedPromptCID,
+        address[] calldata universe,
+        uint16 managementFeeBps,
+        uint16 performanceFeeBps
+    ) external nonReentrant returns (uint256 newTokenId) {
+        require(reapable(deadTokenId), "Guard: not reapable");
+        if (cullFee > 0) IERC20(baseAsset).safeTransferFrom(msg.sender, treasury, cullFee);
+        nft.reapBurn(deadTokenId);
+        newTokenId =
+            nft.mintFor(msg.sender, commitment, riskProfile, cadence, custody, model, encryptedPromptCID, universe, managementFeeBps, performanceFeeBps);
+        emit Culled(deadTokenId, msg.sender, newTokenId, cullFee);
     }
 
     /// @notice Value of the trader's own book (TBA) in base-asset terms.
