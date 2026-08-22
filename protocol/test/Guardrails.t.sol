@@ -74,18 +74,43 @@ contract GuardrailsTest is BaseTest {
         guard.executeTrade(id, address(router), address(usdc), address(weth), amount, quoted, true);
     }
 
+    /// The declared cadence trait (fixture: 4/day, so every 6 hours) is a
+    /// bound enforced on-chain: the owner may tighten the interval but can
+    /// never loosen it below what the brain declared at birth.
     function test_CadenceRateLimit() public {
-        vm.prank(owner);
-        guard.setPolicy(id, 2_000, 100, 1 hours);
         // absolute timestamps: via-IR CSEs repeated block.timestamp reads across vm.warp
         vm.warp(10_000);
+        assertEq(guard.cadenceIntervalOf(id), 6 hours);
+        assertEq(guard.tradeIntervalOf(id), 6 hours);
+        assertEq(guard.nextTradeAt(id), 0);
         execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(guard.nextTradeAt(id), 10_000 + 6 hours);
         uint256 quoted = router.quote(address(usdc), address(weth), 500e18);
         vm.prank(executor);
         vm.expectRevert("Guard: cadence");
         guard.executeTrade(id, address(router), address(usdc), address(weth), 500e18, quoted, true);
+
+        // an owner-set 1h interval changes nothing: the declared cadence floors it
+        vm.prank(owner);
+        guard.setPolicy(id, 2_000, 100, 1 hours);
+        assertEq(guard.tradeIntervalOf(id), 6 hours);
         vm.warp(10_000 + 1 hours);
-        execTrade(id, address(usdc), address(weth), 500e18); // passes after the interval
+        vm.prank(executor);
+        vm.expectRevert("Guard: cadence");
+        guard.executeTrade(id, address(router), address(usdc), address(weth), 500e18, quoted, true);
+        vm.warp(10_000 + 6 hours);
+        execTrade(id, address(usdc), address(weth), 500e18); // passes once the declared interval has elapsed
+
+        // tightening to 12h is honoured
+        vm.prank(owner);
+        guard.setPolicy(id, 2_000, 100, 12 hours);
+        assertEq(guard.tradeIntervalOf(id), 12 hours);
+        vm.warp(10_000 + 6 hours + 6 hours);
+        vm.prank(executor);
+        vm.expectRevert("Guard: cadence");
+        guard.executeTrade(id, address(router), address(usdc), address(weth), 500e18, quoted, true);
+        vm.warp(10_000 + 6 hours + 12 hours);
+        execTrade(id, address(usdc), address(weth), 500e18);
     }
 
     function test_PolicyAdminOnlyOwner() public {

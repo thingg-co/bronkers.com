@@ -10,11 +10,17 @@ import {TraderNFT} from "../src/TraderNFT.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
+import {MockOysterMarket} from "../src/mocks/MockOysterMarket.sol";
 import {RuntimeRegistry} from "../src/RuntimeRegistry.sol";
+import {AutomataDcapTdxVerifier, IAutomataDcapAttestation} from "../src/AutomataDcapTdxVerifier.sol";
 import {IVenue} from "../src/interfaces/ITraderNFT.sol";
 
-/// Local/testnet deployment. On Base Sepolia the canonical 6551 registry
-/// (0x000000006551c19487814612e58FE06813775758) should replace the local one.
+/// Local/testnet deployment. On public testnets the canonical ERC-6551
+/// registry (0x000000006551c19487814612e58FE06813775758) replaces the local
+/// one, and where Automata DCAP is deployed (Polygon, Polygon Amoy, Arbitrum,
+/// Base, and their testnets: 0xaDdeC7e85c2182202b66E331f2a4A0bBB2cEEa1F) the
+/// RuntimeRegistry gets a TDX quote verifier so the farm can register
+/// hardware-attested. Env: ERC6551_REGISTRY, DCAP_ATTESTATION, DCAP_MAX_TCB.
 contract Deploy is Script {
     function run() external {
         vm.startBroadcast();
@@ -54,6 +60,19 @@ contract Deploy is Script {
         guard.setCuratedToken(address(weth), true);
         guard.setCuratedToken(address(wbtc), true);
 
+        // The machine market the farm pays its lease into: a stand-in for the
+        // Marlin Oyster market, same job/deposit/settle surface, priced in the
+        // base asset. Deployed last so the addresses above stay put.
+        MockOysterMarket market = new MockOysterMarket(IERC20(address(usdc)));
+
+        address dcap = vm.envOr("DCAP_ATTESTATION", address(0));
+        address verifier = address(0);
+        if (dcap != address(0)) {
+            uint8 maxTcb = uint8(vm.envOr("DCAP_MAX_TCB", uint256(1)));
+            verifier = address(new AutomataDcapTdxVerifier(IAutomataDcapAttestation(dcap), maxTcb));
+            runtimeRegistry.setVerifier(AutomataDcapTdxVerifier(verifier));
+        }
+
         vm.stopBroadcast();
 
         console.log("mWBTC:        ", address(wbtc));
@@ -65,5 +84,7 @@ contract Deploy is Script {
         console.log("Guard:        ", address(guard));
         console.log("TraderNFT:    ", address(nft));
         console.log("RuntimeReg:   ", address(runtimeRegistry));
+        console.log("Market:       ", address(market));
+        console.log("DcapVerifier: ", verifier);
     }
 }

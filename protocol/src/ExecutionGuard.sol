@@ -74,7 +74,10 @@ contract ExecutionGuard is ReentrancyGuard {
     /// reimbursed for gas and model calls out of the brain's own resources.
     /// Owner-set per brain, protocol-capped, zero by default, and best-effort:
     /// if the source has no base left after the swap the fee is skipped rather
-    /// than blocking the trade. Bounded, so it cannot become an extraction path.
+    /// than blocking the trade. Bounded per trade by maxRuntimeFee and per day
+    /// by the declared cadence (trades are rate-limited to it on-chain, see
+    /// tradeIntervalOf), so the most an executor can ever draw is
+    /// cadence * maxRuntimeFee a day: a fund expense, not an extraction path.
     uint256 public maxRuntimeFee;
     mapping(uint256 => uint256) public runtimeFeeOf;
 
@@ -244,7 +247,8 @@ contract ExecutionGuard is ReentrancyGuard {
         require(venueAllowed[tokenId][venue], "Guard: venue not allowed");
         require(tokenAllowed[tokenId][tokenIn] && tokenAllowed[tokenId][tokenOut], "Guard: token not allowed");
         require(tokenIn != tokenOut && amountIn > 0, "Guard: bad trade");
-        require(block.timestamp >= p.lastTradeAt + p.minTradeInterval, "Guard: cadence");
+        // declared cadence is a bound, not a label: the owner may tighten it, never loosen it
+        require(p.lastTradeAt == 0 || block.timestamp >= p.lastTradeAt + tradeIntervalOf(tokenId), "Guard: cadence");
 
         address source = fromVault ? nft.vaultOf(tokenId) : nft.accountOf(tokenId);
 
@@ -277,6 +281,28 @@ contract ExecutionGuard is ReentrancyGuard {
             IERC20(baseAsset).safeTransferFrom(source, msg.sender, fee);
             emit RuntimeFeePaid(tokenId, msg.sender, fee);
         }
+    }
+
+    /// @notice Seconds between trades implied by the brain's declared cadence
+    /// (a public trait: max trades per day). "24/day" means at most hourly.
+    function cadenceIntervalOf(uint256 tokenId) public view returns (uint64) {
+        uint8 cadence = nft.cadenceOf(tokenId);
+        return cadence == 0 ? uint64(1 days) : uint64(1 days) / cadence;
+    }
+
+    /// @notice The interval executeTrade enforces: the owner-set
+    /// minTradeInterval, floored at the declared cadence. Everything priced per
+    /// trade (the runtime fee) is therefore bounded per day as well.
+    function tradeIntervalOf(uint256 tokenId) public view returns (uint64) {
+        uint64 declared = cadenceIntervalOf(tokenId);
+        uint64 set = policyOf[tokenId].minTradeInterval;
+        return set > declared ? set : declared;
+    }
+
+    /// @notice Earliest timestamp the next trade may execute (0 if it never traded).
+    function nextTradeAt(uint256 tokenId) external view returns (uint64) {
+        uint64 last = policyOf[tokenId].lastTradeAt;
+        return last == 0 ? 0 : last + tradeIntervalOf(tokenId);
     }
 
     /// @notice Paper-season gate, checked by the vault before outside

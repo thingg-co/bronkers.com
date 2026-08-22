@@ -71,4 +71,15 @@ contract TraderNFTTest is BaseTest {
         nft.transferFrom(owner, buyer, id);
         assertEq(nft.genomeOf(id).commitment, keccak256("genome-fixture"));
     }
+
+    function test_MintRequiresCadence() public {
+        address[] memory universe = new address[](1);
+        universe[0] = address(weth);
+        vm.prank(owner);
+        vm.expectRevert("Trader: cadence");
+        nft.mint(keccak256("g"), 1, 0, 1, "m", "cid", universe, 0, 0);
+        uint256 id = mintTrader(0, 0); // fixture declares 4/day
+        assertEq(nft.cadenceOf(id), 4);
+        assertEq(guard.cadenceIntervalOf(id), 6 hours);
+    }
 }

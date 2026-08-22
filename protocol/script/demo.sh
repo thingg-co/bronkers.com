@@ -81,6 +81,9 @@ echo "── LP deposits 10,000 mUSDC into the seasoned trader's vault ──"
 cast send --rpc-url $RPC --private-key $LP_KEY $VAULT "deposit(uint256,address)" 10000ether $LP_ADDR >/dev/null
 echo "NAV: $(cast call --rpc-url $RPC $VAULT "totalAssets()(uint256)")"
 
+echo "── an hour passes (declared cadence 24/day is enforced on-chain) ──"
+cast rpc --rpc-url $RPC evm_increaseTime 3600 >/dev/null; cast rpc --rpc-url $RPC evm_mine >/dev/null
+
 echo "── agent tick on the LP vault: decrypt in-enclave -> verify -> trade ──"
 (cd agent && RPC_URL=$RPC EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY \
   TOKEN_ID=1 TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER \

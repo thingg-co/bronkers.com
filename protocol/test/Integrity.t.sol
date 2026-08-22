@@ -78,6 +78,7 @@ contract IntegrityTest is BaseTest {
         );
         ownBookTrade(id, 100e18);
         assertFalse(guard.seasoned(id), "one trade is not enough");
+        vm.warp(vm.getBlockTimestamp() + 6 hours); // declared cadence 4/day: next slot
         ownBookTrade(id, 100e18);
         assertFalse(guard.seasoned(id), "trade count met but duration not served");
 

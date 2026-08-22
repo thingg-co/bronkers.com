@@ -3,10 +3,13 @@
 #   #1 Umbra    sealed-generated, seasoned, LP-funded, several vault trades
 #   #2 Nocturne sealed-authored, seasoned (one own-book trade), open to deposits
 #   #3 (unnamed) authored, still an intern, no trades
-# Leaves the chain up. Start anvil first:  anvil --silent &
+# plus a prepaid machine lease on the mock Oyster market for the farm to keep
+# topped up from its fee income. Leaves the chain up. Start anvil first:
+#   anvil --silent &
 # Run from the repo root: ./protocol/script/seed-dev.sh
 # Prints a config block for js/config.js and writes the enclave keys to
 # agent/.dev-enclave.env (gitignored) so later agent ticks can reuse them.
+# Env: RPC (default http://127.0.0.1:8545), SEED_CONFIG=0 to leave js/config.js alone.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -17,6 +20,7 @@ EXECUTOR_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 EXECUTOR_ADDR=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 LP_KEY=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
 LP_ADDR=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+LANDLORD_ADDR=0xa0Ee7A142d267C1f36714E4a8F75612F20a79720   # anvil #9: the machine operator the lease is paid to
 RPC=${RPC:-http://127.0.0.1:8545}
 
 cast chain-id --rpc-url $RPC >/dev/null 2>&1 || { echo "no chain at $RPC — run: anvil --silent &"; exit 1; }
@@ -25,7 +29,7 @@ echo "── deploying protocol ──"
 DEPLOY_OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url $RPC --private-key $OWNER_KEY --broadcast 2>&1)
 addr() { echo "$DEPLOY_OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 USDC=$(addr "mUSDC:"); WETH=$(addr "mWETH:"); WBTC=$(addr "mWBTC:"); ROUTER=$(addr "Router:")
-GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:")
+GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:"); MARKET=$(addr "Market:")
 [ -n "$NFT" ] || { echo "deploy failed:"; echo "$DEPLOY_OUT" | tail -20; exit 1; }
 
 echo "── enclave keygen ──"
@@ -36,6 +40,8 @@ printf 'ENCLAVE_PUBLIC_KEY=%s\nENCLAVE_PRIVATE_KEY=%s\n' "$ENCLAVE_PUB" "$ENCLAV
 
 send() { cast send --rpc-url $RPC "$@" >/dev/null; }
 call() { cast call --rpc-url $RPC "$@"; }
+# the declared cadence is enforced on-chain, so consecutive ticks need the clock moved along
+warp() { cast rpc --rpc-url $RPC evm_increaseTime "$1" >/dev/null; cast rpc --rpc-url $RPC evm_mine >/dev/null; }
 mint_brain() { # commitment risk cadence custody
   send --private-key $OWNER_KEY $NFT \
     "mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16)" \
@@ -58,7 +64,7 @@ publish() { # tokenId envelopeFile — the sealed jar goes on-chain as an event 
   send --private-key $OWNER_KEY $NFT "publishEnvelope(uint256,bytes)" "$1" "0x$(xxd -p "agent/$2" | tr -d '\n')"
 }
 
-echo "── brain #1: sealed-generated, seasoned, LP-funded, traded ──"
+echo "── brain #1: sealed-generated, seasoned, LP-funded, traded (cadence 24/day: hourly) ──"
 G1=$(cd agent && ENCLAVE_PUBLIC_KEY="$ENCLAVE_PUB" npm run --silent genome -- generate \
   "Trade the two curated markets with discipline; protect capital first." '{"markets":["WETH/USDC","WBTC/USDC"]}' ./genome.dev1.json)
 C1=$(echo "$G1" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
@@ -75,10 +81,10 @@ send --private-key $OWNER_KEY $VAULT1 "setDepositAllowed(address,bool)" $OWNER_A
 send --private-key $LP_KEY $USDC "mint(address,uint256)" $LP_ADDR 100000ether
 send --private-key $LP_KEY $USDC "approve(address,uint256)" $VAULT1 100000ether
 send --private-key $LP_KEY $VAULT1 "deposit(uint256,address)" 10000ether $LP_ADDR
-tick 1 ./genome.dev1.json
-set_price 2200ether;  tick 1 ./genome.dev1.json
-set_price 2100ether;  tick 1 ./genome.dev1.json
-set_price 2500ether;  tick 1 ./genome.dev1.json
+warp 3600;                    tick 1 ./genome.dev1.json
+set_price 2200ether; warp 3600; tick 1 ./genome.dev1.json
+set_price 2100ether; warp 3600; tick 1 ./genome.dev1.json
+set_price 2500ether; warp 3600; tick 1 ./genome.dev1.json
 echo "   Umbra: $(call $GUARD "tradeCountOf(uint256)(uint32)" 1) trades, NAV $(call $VAULT1 "totalAssets()(uint256)")"
 
 echo "── brain #2: sealed-authored, seasoned, open to deposits ──"
@@ -105,9 +111,17 @@ MEASUREMENT=$(cd agent && ENCLAVE_PRIVATE_KEY="$ENCLAVE_PRIV" EXECUTOR_PRIVATE_K
 send --private-key $OWNER_KEY $REG "approveMeasurement(bytes32,bool)" "$MEASUREMENT" true
 echo "   approved $MEASUREMENT"
 
+echo "── machine lease: a prepaid job on the mock Oyster market, owned and topped up by the farm's key ──"
+# 0.12 mUSDC per hour, expressed per second with the market's 12 extra decimals; two hours prepaid
+RATE=$(python3 -c 'print(120000000000000000 * 10**12 // 3600)')
+send --private-key $OWNER_KEY $USDC "mint(address,uint256)" $EXECUTOR_ADDR 20ether     # the farm's starting float; fees top it up
+send --private-key $EXECUTOR_KEY $USDC "approve(address,uint256)" $MARKET "$(cast max-uint)"
+JOB=$(cast send --rpc-url $RPC --private-key $EXECUTOR_KEY --json $MARKET "jobOpen(string,address,uint256,uint256)" "brokners-farm" $LANDLORD_ADDR "$RATE" 240000000000000000 \
+  | python3 -c 'import json,sys; r=json.load(sys.stdin); print([l for l in r["logs"] if len(l["topics"])==4][-1]["topics"][1])')
+echo "   job $JOB · rate 0.12 mUSDC/h · 2h prepaid · landlord $LANDLORD_ADDR"
+
 echo "── dev balances ──"
 send --private-key $OWNER_KEY $USDC "mint(address,uint256)" $OWNER_ADDR 100000ether
-send --private-key $EXECUTOR_KEY $USDC "mint(address,uint256)" $EXECUTOR_ADDR 100000ether
 
 cat <<EOF
 
@@ -120,25 +134,29 @@ cat <<EOF
     wbtc: "$WBTC",
     enclavePublicKey: "$ENCLAVE_PUB",
     registry: "$REG",
+    hostMarket: "$MARKET",
 
 dev wallet (anvil #0, owner of all three brains): $OWNER_KEY
 LP wallet  (anvil #2, holds Umbra shares):        $LP_KEY
 
-the farm (enclave runtime that runs every enrolled brain; #1 and #2 are enrolled and published):
+the farm (enclave runtime that runs every enrolled brain and pays its own lease; #1 and #2 are enrolled and published):
   cd agent && set -a && . ./.dev-enclave.env && set +a && \\
   RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER REGISTRY_ADDRESS=$REG \\
+  FARM_HOST=market FARM_HOST_MARKET=$MARKET FARM_HOST_JOB_ID=$JOB FARM_NATIVE_PRICE=2000 \\
   FARM_HTTP_PORT=8787 EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY npm run farm -- --mock-brain
 EOF
 
-# keep js/config.js's anvil block in sync with what was just deployed
-python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" <<'PY'
+# keep js/config.js's anvil block in sync with what was just deployed (SEED_CONFIG=0 skips this)
+if [ "${SEED_CONFIG:-1}" != "0" ]; then
+python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" "$MARKET" <<'PY'
 import re, sys, pathlib
-nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry = sys.argv[1:]
+nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry, market = sys.argv[1:]
 p = pathlib.Path("js/config.js"); t = p.read_text()
 start = t.index("    31337: {"); end = t.index("    },", start)
 block = t[start:end]
-for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry).items():
+for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry, hostMarket=market).items():
     block = re.sub(rf'(\s{k}: )"[^"]*"', rf'\g<1>"{v}"', block)
 p.write_text(t[:start] + block + t[end:])
 print("js/config.js anvil block updated")
 PY
+fi

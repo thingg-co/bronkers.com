@@ -97,6 +97,7 @@ contract TraderNFT is ERC721, ITraderNFT {
     ) external returns (uint256 tokenId) {
         require(commitment != bytes32(0), "Trader: empty commitment");
         require(custody <= CUSTODY_SEALED_GENERATED, "Trader: bad custody");
+        require(cadence > 0, "Trader: cadence"); // the guard divides a day by it
         require(nextId < MAX_SUPPLY, "Trader: sold out");
         tokenId = ++nextId;
         _safeMint(msg.sender, tokenId);
@@ -139,6 +140,12 @@ contract TraderNFT is ERC721, ITraderNFT {
 
     function vaultOf(uint256 tokenId) external view returns (address) {
         return _vaults[tokenId];
+    }
+
+    /// @notice The declared cadence trait (max trades per day). The guard
+    /// reads it on every trade and turns it into a minimum interval.
+    function cadenceOf(uint256 tokenId) external view returns (uint8) {
+        return _genomes[tokenId].cadence;
     }
 
     /// @notice Give a brain its name. Owner-only, once, at most 32 bytes.
