@@ -2,7 +2,7 @@
 
 **Autonomous traders with verifiable, transferable track records**
 
-*Concept paper, v0.3 working draft, August 2026*
+*Concept paper, v0.4 working draft, August 2026*
 
 > **Status.** This is a research document describing a testnet prototype. The
 > contracts, runtime, and figures described here run on a local chain and on testnets
@@ -209,7 +209,9 @@ it, and upgrades are irreversible. The titles are decorative; the limits are not
 *Slippage bound.* `minAmountOut` must lie within a configured tolerance of the venue
 quote.
 
-*Cadence.* Trades may not exceed the frequency declared in the public traits.
+*Cadence.* Trades may not exceed the frequency declared in the public traits: the guard
+derives a minimum interval from the declared trades-per-day and enforces it as a floor
+under the owner's own interval, so the trait is a bound rather than a label.
 
 *No exit path.* Swap proceeds are returned to the agent's wallet or vault. The executor
 key cannot withdraw, approve, or transfer assets to any external address under any
@@ -256,15 +258,19 @@ Third, an attested runtime commits, with each trade, a hash of the full inferenc
 transcript (market snapshot in, trade intent out). The transcript can be disclosed on
 request for audit without exposing the genome.
 
-The prototype ships the registry half of this without the hardware half, and labels the
-difference. A `RuntimeRegistry` contract lets an executor key register the measurement
-of the runtime it belongs to (a hash over the runtime's source bundle) together with the
-enclave public key genomes are sealed to; the protocol can approve measurements it has
-reproduced. A brain whose executor is registered to an approved measurement is shown as
-running an attested runtime, with the qualification, stated wherever the label appears,
-that the measurement is self-reported and reviewed rather than signed by hardware. When
-a TEE is available, `register` gains a signature check over the same fields and nothing
-else moves.
+The prototype ships the registry and the verifier, and labels what it cannot yet prove.
+A `RuntimeRegistry` contract lets an executor key register the measurement of the
+runtime it belongs to together with the enclave public key genomes are sealed to, in one
+of two ways. Self-reported: the key states a hash over the runtime's source bundle, and
+the protocol approves measurements it has reproduced. Attested: the key presents an
+Intel TDX quote; the chain's DCAP verifier (Automata's, which is deployed on Polygon)
+checks it; an adapter reads the measured boot chain (MRTD and RTMRs) out of the verified
+report; and the registry requires the quote's report data to be the hash of the executor
+key and the enclave key, so the binding between key and image is the hardware's
+statement rather than the key's. In both cases a brain whose executor is registered to
+an approved measurement is shown as running an attested runtime, and the label says
+which path was taken: verified quote, or self-reported and reviewed. What remains is
+operational: running the farm image on a TDX machine and producing the quote.
 
 Behavioural statistics, such as round-the-clock cadence or sub-second reaction to
 on-chain events, are sometimes proposed as evidence of machine execution. In our view
@@ -301,20 +307,34 @@ per-brain runtime fee, set by the owner in the base asset and capped by a protoc
 constant, which is paid from whichever book the trade used (the vault or the brain's
 wallet) to the executor on each successful trade. It is paid after the swap and skipped
 if the book holds no base asset at that moment, so it can never block a trade or compete
-with it for capital; because it is capped and paid only on trades the guard has already
-bounded by notional, slippage, and cadence, it cannot become an extraction path. An
-operator publishes the fee it asks for and may decline to run brains that pay less. For
-a vault this is an ordinary fund expense, visible in the record like any other.
+with it for capital. Because trades themselves are bounded on-chain by the declared
+cadence, the fee is bounded per day: an executor can draw at most the cadence times the
+cap, and it cannot become an extraction path. An operator publishes the fee it asks for
+and may decline to run brains that pay less. For a vault this is an ordinary fund
+expense, visible in the record like any other.
+
+The fee is paid on trades rather than on every tick, so that the executor's permission
+set stays one function; the consequence is that a brain which holds more often than it
+trades costs its operator inference it does not pay for. The farm therefore keeps an
+account per brain: fees received, recomputed from the chain, against the model tokens
+and gas its ticks consumed. A brain may run a fixed allowance on credit; past it the
+brain is paused, and the account states the per-trade fee that would have covered it at
+its observed trade rate. Raising the fee is the owner's answer: the outstanding balance
+is written off once and the brain runs again. The accounts are published by the enclave
+and shown beside the fee control, so the owner is given the number rather than left to
+guess it.
 
 The same principle extends to the machine the enclave runs on. We do not use a
 conventional cloud account. The enclave runs in an Intel TDX confidential machine rented
-from a compute marketplace on which a bare key can rent, verify, and extend a machine,
-priced per minute in the base asset; the enclave's own key pays the rent out of the
-runtime fees it has collected, bridging between chains where necessary. Model inference
-is bought the same way, per request in the base asset, from an inference gateway that
-itself runs in a TEE and signs each response. No card, no subscription, and no
-operator's account stands between a brain's capital and the compute that runs it. The
-owner's only actions remain minting, funding, enrolling, and setting the fee.
+on a market on which a bare key opens a prepaid job, priced per second in the base
+asset, and extends it with a deposit; the farm reads its own lease from that market and,
+before it runs out, tops it up from the runtime fees it has collected, bridging between
+chains where necessary. Every payment is recorded beside the fees. Model inference is
+bought the same way, per request in the base asset, from an inference gateway that
+itself runs in a TEE and signs each response; the runtime speaks to it through the same
+interface as to a conventional model API. No card, no subscription, and no operator's
+account stands between a brain's capital and the compute that runs it. The owner's only
+actions remain minting, funding, enrolling, and setting the fee.
 
 ## 7. Verifiability of the Record
 
@@ -432,8 +452,10 @@ not.
 
 **Runtime liveness.** An enrolled brain trades only while the enclave operator keeps
 the farm running. If it stops, the brain idles; nothing is lost, depositors can still
-withdraw, and the owner can unenrol and run the brain elsewhere. Attested execution
-would let a buyer verify the runtime; it would not by itself guarantee liveness.
+withdraw, and the owner can unenrol and run the brain elsewhere. A brain may also be
+paused by its operator's credit policy (Section 6.2); the condition is stated in the
+account the enclave publishes, and the remedy is the fee. Attested execution would let a
+buyer verify the runtime; it would not by itself guarantee liveness.
 
 **MEV.** Agent trades are visible intents. Tight slippage bounds and size caps limit
 the damage; production should route through private order flow.
@@ -463,9 +485,11 @@ attestation, it should be read as a claim.
 1. **Prototype** (this repository): contracts, agent runtime, and a demonstration on a
    local chain.
 2. **Testnet pilot** (Polygon Amoy): canonical ERC-6551 registry, the Polymarket
-   adapter exercised against a mock conditional-token exchange, the enclave on a rented
-   TDX machine paying its own lease from runtime fees, inference from a TEE gateway paid
-   in the base asset, attestation quotes verified on-chain, public leaderboard. Followed
-   by a limited run against the live order book with agent-owned capital only.
+   adapter exercised against a mock conditional-token exchange, the farm's ledger, lease
+   loop and attested registration (built, and exercised locally against a mock machine
+   market and a mock verifier) run on a rented TDX machine paying its own lease from
+   runtime fees, inference from a TEE gateway paid in the base asset, attestation quotes
+   verified on-chain through the deployed verifier, public leaderboard. Followed by a
+   limited run against the live order book with agent-owned capital only.
 3. **Audit**: an independent review of the contracts and of the enclave runtime. The outcome determines whether anything proceeds, and in which mode (closed-only or open vaults).
 4. **Mainnet decision**: taken only after step 3, and possibly never for open vaults.
