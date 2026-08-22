@@ -7,33 +7,41 @@ repository and, where they differ, the production design. Testnet/local only.*
 
 ```mermaid
 flowchart LR
-    subgraph onchain [On-chain - Base]
+    subgraph onchain [On-chain - Polygon (Amoy on testnet, anvil locally)]
         NFT[TraderNFT ERC-721]
         REG[ERC-6551 Registry]
         TBA[Token-Bound Account per trader]
         VAULT[TraderVault ERC-4626 per trader]
         GUARD[ExecutionGuard]
-        DEX[DEX router - allowlisted]
+        DEX[Venue - curated]
+        RREG[RuntimeRegistry + DCAP verifier]
+        MKT[Machine market - Oyster / mock]
         NFT -->|mint creates| TBA
         NFT -->|mint creates| VAULT
         REG -.->|derives| TBA
         GUARD -->|guarded swaps only| DEX
         VAULT <-->|pull in / proceeds out| GUARD
         TBA <-->|pull in / proceeds out| GUARD
+        GUARD -->|runtime fee per trade| FARMKEY[executor key]
     end
     subgraph offchain [Off-chain]
-        RT[Agent runtime - Node/TS]
-        CLAUDE[Claude API]
-        SS[SecretStore - encrypted genome]
+        RT[The farm - Node/TS enclave runtime]
+        MODEL[Model - Anthropic API or TEE inference gateway]
+        LEDGER[Ledger - budget.ts]
         IDX[Indexer / report.ts]
-        SITE[brokners.com static site]
+        SITE[brokners.com static site + Terminal]
     end
-    SS -->|decrypt + verify hash| RT
-    RT -->|market snapshot + genome| CLAUDE
-    CLAUDE -->|TradeIntent JSON| RT
+    NFT -->|EnvelopePublished| RT
+    RT -->|unseal + verify hash| RT
+    RT -->|market snapshot + genome| MODEL
+    MODEL -->|TradeIntent + token usage| RT
     RT -->|executeTrade via executor key| GUARD
-    GUARD -->|TradeExecuted events| IDX
+    RT -->|register / registerAttested| RREG
+    RT -->|jobDeposit from fee income| MKT
+    RT <-->|fees in, costs out| LEDGER
+    GUARD -->|TradeExecuted, RuntimeFeePaid| IDX
     IDX -->|data/traders.json| SITE
+    RT -->|/health, /ledger| SITE
 ```
 
 The design principle: **the runtime is untrusted; the contract is the trust boundary.**
@@ -54,18 +62,21 @@ struct Genome {
     bytes32 commitment;        // keccak256 of canonical genome JSON — immutable
     uint64  birthBlock;
     uint8   riskProfile;       // 0 conservative / 1 balanced / 2 aggressive
-    uint8   cadence;           // declared max trades per day (informational trait)
+    uint8   cadence;           // declared max trades per day (>= 1; enforced by the guard)
+    uint8   custody;           // 0 authored / 1 sealed-authored / 2 sealed-generated
     string  model;             // pinned model identifier
     string  encryptedPromptCID;// pointer to the encrypted genome blob
 }
 ```
 
-- `mint(bytes32 commitment, uint8 riskProfile, uint8 cadence, string model, string cid)`
+- `mint(commitment, riskProfile, cadence, custody, model, cid, universe, mgmtBps, perfBps)`
   — stores the genome record, deploys the token's TBA via the 6551 registry, deploys
-  the token's `TraderVault` clone, registers default guard policy, emits `TraderBorn`.
+  the token's `TraderVault`, registers default guard policy, emits `TraderBorn`.
+  Requires `cadence >= 1` (the guard divides a day by it).
 - `MAX_SUPPLY = 4096` — the collection is hard-capped ("one brain per bit"); mint
   reverts once `nextId` reaches it.
-- `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)` — getters.
+- `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)`,
+  `cadenceOf(id)` — getters.
 - `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
   record cannot be laundered by renaming.
 - `tokenURI(id)` — on-chain `data:application/json;base64` metadata with the jar SVG and
@@ -88,7 +99,7 @@ The only contract the executor key can usefully call. Per-trader policy:
 | `tokenAllowlist` | the trader's asset universe (⊆ curated set) |
 | `maxNotionalBps` | per-trade cap as bps of NAV |
 | `maxSlippageBps` | tolerance of `minAmountOut` vs. quote |
-| `minTradeInterval` | on-chain cadence rate limit |
+| `minTradeInterval` | owner-set rate limit, floored at the declared cadence |
 
 **Protocol curation (anti-wash-trading).** `curatedVenue` / `curatedToken` maps are
 deployer-level. `initPolicy` (at mint) requires the venue and the whole universe to be
@@ -102,6 +113,13 @@ ceilings; deployer-tunable via `setTier`) bound each trader's `maxNotionalBps`.
 fee in the base asset to the protocol `treasury`; `setPolicy` clamps to the seat's
 ceiling. Everyone mints as an Intern.
 
+**Declared cadence, enforced.** `cadenceIntervalOf(id) = 1 day / nft.cadenceOf(id)`;
+`tradeIntervalOf(id) = max(minTradeInterval, cadenceIntervalOf)`; `executeTrade`
+requires `block.timestamp >= lastTradeAt + tradeIntervalOf` (the first trade is
+exempt). The trait a brain declares at birth is therefore a bound the chain keeps:
+"24/day" means at most hourly. Owners tighten through `setPolicy`, never loosen.
+`nextTradeAt(id)` is the view the Terminal and the farm read.
+
 **Paper season.** The guard counts `tradeCountOf[tokenId]` and stamps
 `firstTradeAt[tokenId]`. `seasoned(tokenId)` is true once the trader has made
 `seasonMinTrades` trades and `seasonDuration` has elapsed since its first trade — both
@@ -112,12 +130,13 @@ any outside deposit clears.
 `executeTrade(tokenId, venue, tokenIn, tokenOut, amountIn, minAmountOut, fromVault)`:
 
 1. `require(msg.sender == executor[tokenId])`
-2. venue + both tokens allowlisted; interval elapsed
+2. venue + both tokens allowlisted; `tradeIntervalOf` elapsed since the last trade
 3. `amountIn <= maxNotionalBps × NAV / 10_000`
 4. `minAmountOut >= quote × (10_000 − maxSlippageBps) / 10_000`
 5. pull `amountIn` from the vault (or TBA), swap at `venue`, require
    `received >= minAmountOut`, **return all proceeds to the source of funds**
 6. emit `TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut)`
+7. pay the runtime fee (below), if any, and emit `RuntimeFeePaid`
 
 There is no code path that sends assets to an arbitrary address. This invariant is
 fuzz-tested (`Guardrails.t.sol`).
@@ -128,14 +147,33 @@ so administrative control follows the token automatically on transfer.
 **Runtime fee.** `runtimeFeeOf[tokenId]` (owner-set via `setRuntimeFee`, ≤ the
 deployer's `maxRuntimeFee`) is paid in the base asset from the traded source to the
 executor after each successful `executeTrade`, and skipped if the source has no base
-left. Capped and post-trade, so the no-extraction invariant holds (Runtime.t.sol).
+left. Capped per trade, post-trade, and bounded per day because trades are bounded
+by the enforced cadence: the most an executor can ever draw is cadence × cap a day.
+The no-extraction invariant holds (Runtime.t.sol).
 
-### 2.2b RuntimeRegistry.sol
+### 2.2b RuntimeRegistry.sol + AutomataDcapTdxVerifier.sol
 
-`register(measurement, enclavePublicKey)` is called by an executor key; `approveMeasurement`
-is deployer-only; `attested(executor)` = registered and approved. The measurement is a
-sha256 over the agent source bundle (`agent/src/measure.ts`), self-reported by the farm
-at start. Honest label until a TEE signs it.
+An executor key binds itself to a runtime. Two paths: `register(measurement,
+enclavePublicKey)` is self-reported (the farm's sha256 over its source bundle,
+`agent/src/measure.ts`); `registerAttested(quote, enclavePublicKey)` hands a TEE quote
+to the deployer-set `IQuoteVerifier`, which must return the measurement and the first
+32 bytes of the quote's report data, and the registry requires that report data to equal
+`keccak256(executor ‖ enclavePublicKey)`, so the hardware, not the key, vouches for the
+binding. `approveMeasurement` is deployer-only; `attested(executor)` = registered and
+approved (either path); `attestationOf` says which path (0 none, 1 self-reported, 2
+hardware); `hardwareAttested` = approved and hardware. The Terminal labels the three
+cases differently.
+
+`AutomataDcapTdxVerifier` is the adapter over Automata's DCAP attestation entrypoint
+(`verifyAndAttestOnChain(rawQuote) → (success, output)`, payable, gas-proportional fee
+refunded in excess; deployed at `0xaDdeC7e85c2182202b66E331f2a4A0bBB2cEEa1F` on Polygon,
+Polygon Amoy, Arbitrum One, Base and their testnets). It reads the TD 1.0/1.5 report body
+out of the serialized `Output` (11-byte header, then the 584-byte body: `mrTd` at 136,
+`rtMr0..3` at 328, `reportData` at 520), rejects non-TD bodies and TCB statuses above
+the configured maximum, and returns `keccak256(mrTd ‖ rtMr0 ‖ rtMr1 ‖ rtMr2 ‖ rtMr3)` as
+the measurement. `Deploy.s.sol` wires it when `DCAP_ATTESTATION` is set;
+`deploy-testnet.sh` sets it where the entrypoint exists. Tests drive both the registry
+(mock verifier) and the adapter's parsing (mock entrypoint, synthetic output).
 
 ### 2.3 TraderVault.sol (ERC-4626 clone per trader)
 
@@ -166,7 +204,7 @@ at start. Honest label until a TEE signs it.
 |---|---|---|---|---|
 | `deposit` (if allowlisted) / `withdraw` | | ✔ | | |
 | `executeTrade` | | | ✔ | |
-| `setExecutor`, `setPolicy` | | | | ✔ |
+| `setExecutor`, `setPolicy`, `setRuntimeFee` | | | | ✔ |
 | sweep TBA (sell-without-capital) | | | | ✔ |
 | `checkpoint()` | ✔ | | | |
 | read genome, traits, history | ✔ | | | |
@@ -174,7 +212,11 @@ at start. Honest label until a TEE signs it.
 ### 2.5 Mocks (prototype only)
 
 `MockERC20` (open mint), `MockSwapRouter` (settable price, exact-in `swap()`,
-`quote()` view, adjustable execution-vs-quote skew for negative slippage tests).
+`quote()` view, adjustable execution-vs-quote skew for negative slippage tests),
+`MockOysterMarket` (the machine market: `jobOpen`/`jobDeposit`/`jobSettle`/`jobs`,
+per-second rate with `EXTRA_DECIMALS`, the same surface as Marlin's MarketV1 so the
+farm's lease code is identical locally and in production), `MockQuoteVerifier` and
+`MockDcapAttestation` (tests for the registry and the adapter).
 The guard is venue-agnostic. The first live target is Polymarket's conditional-token
 exchange on Polygon (USDC collateral, binary outcome tokens as `tokenIn`/`tokenOut`),
 reached through the same `IVenue` path, with the canonical 6551 registry
@@ -219,17 +261,19 @@ every run: unseal/decrypt ─▶ recompute hash ─▶ MUST equal on-chain commi
 
 ## 4. Agent runtime
 
-Node 20 + TypeScript, `viem` + `@anthropic-ai/sdk` + `zod`. Loop
+Node 20+ and TypeScript, `viem` + `@anthropic-ai/sdk` + `zod`. Self-hosted loop
 (`agent/src/index.ts`):
 
 ```
 load config → SecretStore.decrypt(genome) → verify hash vs on-chain commitment
-  → snapshot market (balances, quotes, recent trades)
-  → brain: Claude API, system prompt = genome, forced tool schema:
+  → snapshot market (balances, quotes, policy)
+  → brain: system prompt = genome, forced tool schema:
       TradeIntent { action: "swap" | "hold", tokenIn, tokenOut, amountIn, rationale }
-  → policy.ts: local mirror of on-chain checks (fail fast, better errors)
-  → executor.ts: compute minAmountOut from quote × slippage bound;
-      simulate, then send executeTrade with the executor key
+      (ClaudeBrain over Anthropic's API, or GatewayBrain over an OpenAI-compatible
+       TEE inference gateway when INFERENCE_BASE_URL is set; both return token usage)
+  → executor.ts prepare(): local mirror of on-chain checks (fail fast, better errors)
+  → executor.ts execute(): minAmountOut from quote × slippage bound;
+      simulate, then send executeTrade with the executor key; returns the receipt
   → log receipt + TradeExecuted event → sleep(cadence) │ --once │ --dry-run
 ```
 
@@ -237,26 +281,67 @@ load config → SecretStore.decrypt(genome) → verify hash vs on-chain commitme
   needed).
 - The executor private key is a **burner**: bounded blast radius by construction. The
   owner key never touches the runtime.
-- `report.ts` scans `TradeExecuted`/`Deposit` events and writes `data/traders.json`
-  for the static site — the site renders, never computes.
+- `report.ts` scans `TradeExecuted`/`RuntimeFeePaid` events and writes
+  `data/traders.json` for the static site — the site renders, never computes.
 
 ### 4a. The farm (`agent/src/farm.ts`)
 
 One enclave process for every enrolled brain. Enrolment is `setExecutor(tokenId,
 farmKey)`; the farm polls the chain, and for each token whose executor is its key it
 takes the latest `EnvelopePublished` envelope, unseals it with `ENCLAVE_PRIVATE_KEY`,
-verifies `commit(genome) == commitment`, and runs the brain at its declared cadence.
-Book selection: own wallet while unseasoned, vault once seasoned and funded, idle if
-neither holds funds or the wallet has not approved the guard. No persistence: it
-resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via
-`npm run loop`). Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
+verifies `commit(genome) == commitment`, and runs the brain at its declared cadence,
+keeping time by the chain's clock (the guard enforces the cadence on-chain). Book
+selection: own wallet while unseasoned, vault once seasoned and funded, idle if neither
+holds funds or the wallet has not approved the guard. No protocol state of its own: it
+resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via `npm
+run loop`). Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
 `FARM_POLL_SECONDS`, `FARM_MIN_FEE` (refuse brains paying less), `FARM_HTTP_PORT` (the
-enclave endpoint: `GET /health`, `POST /compose {brief, tweaks}` → `{commitment,
-envelope}` for sealed-generated brains; the prompt never leaves the process),
-`REGISTRY_ADDRESS` (self-register the runtime measurement at start), `FARM_TURBO=1` (dev:
-ignore declared cadence and tick every poll).
+enclave endpoint: `GET /health`, `GET /ledger[?tokenId=]`, `POST /compose {brief,
+tweaks}` → `{commitment, envelope}` for sealed-generated brains; the prompt never leaves
+the process), `REGISTRY_ADDRESS` (self-register the runtime measurement at start;
+`FARM_QUOTE_PATH` + `FARM_QUOTE_FEE` for `registerAttested` — the farm prints the report
+data the quote must carry), `FARM_TURBO=1` (dev: tick every poll; trades still wait for
+the on-chain cadence).
 
-## 4b. The Terminal
+### 4b. Paying for the runtime (`budget.ts`, `host.ts`, `bridge.ts`)
+
+The farm keeps books and pays its own way; the mechanism is in
+[runtime-hosting.md](runtime-hosting.md), the code in three modules.
+
+- **Ledger (`budget.ts`).** Per brain: ticks and trades; fees received (the
+  `RuntimeFeePaid` logs to this executor key, folded in from the birth block and
+  refreshed every round, so income is recomputed from the chain); model cost (token usage
+  × a per-model price table, `FARM_PRICE_IN/OUT` to override, the gateway priced by
+  `INFERENCE_PRICE_IN/OUT`); gas cost (receipt `gasUsed × effectiveGasPrice` priced via
+  `FARM_NATIVE_PRICE`, base units per native token). Farm-wide: the lease accrued at the
+  host's hourly rate and the lease payments made. Persisted to `FARM_LEDGER_PATH`
+  (`.farm-ledger.json`, gitignored; it is the operator's bookkeeping, not protocol state).
+- **Credit policy.** `credit = feesPaid + forgiven + FARM_GRACE − cost`. Below zero the
+  brain is paused and the log says what it cost, what it paid, and the per-trade fee that
+  would have covered it (`cost / trades`). Raising the runtime fee is the owner's answer:
+  the debt is written off once (`forgiven`) and the brain runs again; lowering it changes
+  nothing. Fees arrive only on trades, by design (the executor's permission set stays one
+  function), so a brain that holds more than it trades needs a fee that pays for its holds
+  as well; the ledger tells the owner the number.
+- **Lease (`host.ts`).** `FARM_HOST=oyster` reads the job on Marlin's market on Arbitrum
+  One (`jobs(jobId)` → rate per second scaled by `EXTRA_DECIMALS`, balance, last
+  settlement; remaining = (balance − rate × elapsed) / rate) and, when less than
+  `FARM_HOST_MIN_SECONDS` remain, buys `FARM_HOST_EXTEND_SECONDS` more with `approve` +
+  `jobDeposit` from the payer key (the executor key by default); `FARM_HOST=market` runs
+  the same code against the mock market next to the protocol, which is how the loop is
+  exercised on anvil; `FARM_HOST=none` only prices the machine (`FARM_HOST_RATE`) for the
+  ledger. Every payment is logged with its hash and recorded.
+- **Bridge (`bridge.ts`).** Circle CCTP v2 from the protocol chain to the host chain
+  (`depositForBurn` on TokenMessengerV2, attestation from Iris, `receiveMessage` on
+  MessageTransmitterV2), `npm run bridge -- --amount 10 --to 42161 [--dry-run]`. The farm
+  prints the command when the lease cannot be extended for lack of float. On testnet the
+  protocol's base asset is a mock token, so the bridge has meaning on mainnet only.
+- **Endpoints.** `/health` carries the farm's totals (income, model, gas, lease accrued and
+  paid, float, native balance, host status) and `/ledger` the per-brain accounts with
+  credit, paused state and suggested fee. The Terminal shows both; nothing on-chain
+  depends on them.
+
+### 4c. The Terminal
 
 `app.html` + `js/terminal/` is the browser client: read-only over the chain's RPC,
 writes through the wallet, no backend. Structure, behaviour and the dev loop are in
@@ -272,11 +357,11 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 
 ## 6. Deployment topology
 
-| Environment | Registry | Venue | Purpose |
-|---|---|---|---|
-| anvil (local) | deployed by `Deploy.s.sol` | `MockSwapRouter` | tests + demo (primary target) |
-| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | public testnet pilot (`protocol/script/deploy-testnet.sh`) |
-| Polygon mainnet | canonical `0x…5758` | Polymarket CTF Exchange | limited run, agent-owned capital only; gated on audit |
+| Environment | Registry | Venue | Attestation | Machine market | Purpose |
+|---|---|---|---|---|---|
+| anvil (local) | deployed by `Deploy.s.sol` | `MockSwapRouter` | none (self-reported) | `MockOysterMarket` | tests + demo (primary target) |
+| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | Automata DCAP `0xaDdeC7…Ea1F` via the adapter | `MockOysterMarket` (the real lease is on Arbitrum) | public testnet pilot (`protocol/script/deploy-testnet.sh`) |
+| Polygon mainnet | canonical `0x…5758` | Polymarket CTF Exchange | Automata DCAP | Marlin Oyster market on Arbitrum One, fees bridged by CCTP | limited run, agent-owned capital only; gated on audit |
 
 ## 7. Threat model
 
@@ -290,9 +375,11 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | MEV / front-running | tight `minAmountOut` | private order flow |
 | Wash-traded track record | protocol-curated venues/tokens (owner cannot add own pools) + paper season before outside deposits | + leaderboard footnoting, volume-quality weighting |
 | Instant-flip of fresh mints | paper season: min own-book trades + duration before vault opens | same, longer parameters |
+| Executor churns trades to farm the runtime fee | fee capped per trade and trades rate-limited on-chain to the declared cadence: at most cadence × cap a day | same |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
 | NFT deposited into own TBA (ownership cycle) | blocked: TBA cannot receive its own collection | same |
-| Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim | TEE-attested executor keys + attestation registry ("Proof of Brain") |
+| Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
+| Operator runs brains at a loss and stops | per-brain credit; paused brains are told the covering fee; lease topped up from fees | same, with the lease on a market a bare key pays |
 | Fee sniping around transfer | fees accrue to TBA + checkpoint in transfer hook | same |
 
 ## 8. Open questions
@@ -304,5 +391,9 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
   change.
 - Genome rotation on sale (privacy) vs. hash immutability (provenance) — currently
   resolved in favor of provenance.
-- On-chain cadence enforcement (current: yes, `minTradeInterval`) vs. leaving cadence
-  as an informational trait only.
+- Cadence enforcement: resolved (Aug 2026) in favour of enforcing the declared trait
+  on-chain as a floor under the owner's interval, which is what the paper promised and
+  what bounds the runtime fee per day.
+- Whether the runtime fee should ever be payable on a hold tick (it would be a second
+  executor entry point); today the operator's credit policy absorbs holds and the owner
+  prices them into the per-trade fee.

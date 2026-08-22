@@ -15,9 +15,10 @@ session needs to know that the code doesn't say.
 
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the
-   internship, Ring the Bell, "sell the whole guy"). Contracts, tests, and
-   docs stay rigorous and deadpan. The "Silly Copy. Serious Code." table on
-   index.html maps every meme claim to its enforcing invariant — keep it true.
+   internship, Ring the Bell, "sell the whole guy", "it pays its own rent").
+   Contracts, tests, and docs stay rigorous and deadpan. The "Silly Copy.
+   Serious Code." table on index.html maps every meme claim to its enforcing
+   invariant — keep it true.
 2. **Testnet only — legal gate.** Open vaults are the Howey fact pattern.
    Nothing deploys to mainnet and no real deposits are taken without
    securities counsel first. This gate has been explicitly maintained even
@@ -27,12 +28,15 @@ session needs to know that the code doesn't say.
    views/{floor,brain,create,desk,dev}), viem via esm.sh, reads over the
    chain's public RPC (works with no wallet), writes through the wallet.
    Config lives in js/config.js (`chains: {id: {rpc, explorer, addresses,
-   enclavePublicKey}}`) with per-chain localStorage overrides from the
-   Developer tab. The only off-chain processes are the agent runtime (the
-   "enclave") and the optional static data/traders.json from agent report.ts
-   (the Terminal's offline snapshot). docs/terminal.md is the spec. Dev loop:
-   `anvil` + protocol/script/seed-dev.sh (rewrites the anvil block of
-   js/config.js). Keep it that way.
+   enclavePublicKey, enclaveUrl, hostMarket}}`) with per-chain localStorage
+   overrides from the Developer tab. The only off-chain processes are the
+   agent runtime (the "enclave") and the optional static data/traders.json
+   from agent report.ts (the Terminal's offline snapshot). The farm's ledger
+   file (agent/.farm-ledger.json, gitignored) is operator bookkeeping, not
+   protocol state; the Terminal reads it through the farm's endpoint and never
+   depends on it. docs/terminal.md is the spec. Dev loop: `anvil` +
+   protocol/script/seed-dev.sh (rewrites the anvil block of js/config.js).
+   Keep it that way.
 4. **Zero build tooling for the site.** Plain HTML/CSS/JS, GitHub Pages from
    repo root (CNAME → brokners.com, .nojekyll). **One stylesheet:
    css/brokners.css**, loaded by every page; no inline `<style>` blocks
@@ -53,12 +57,18 @@ session needs to know that the code doesn't say.
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 55 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 60 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
 - Venues/tokens protocol-curated (two markets: mWETH/mUSDC, mWBTC/mUSDC);
   owners narrow, never add.
+- **Declared cadence is enforced on-chain** (Aug 2026): `tradeIntervalOf` =
+  max(owner `minTradeInterval`, 1 day / `cadenceOf`), checked in
+  executeTrade (first trade exempt); mint requires cadence ≥ 1. Owners
+  tighten, never loosen. `nextTradeAt` is the view. The farm and the dev seed
+  move the anvil clock (`evm_increaseTime`) between ticks; the Developer tab
+  has the lever.
 - Paper season gates vault deposits (own-book trades first, fromVault=false).
 - Fees: streamed mgmt + perf above per-share HWM, minted to the trader's TBA
   (travel with the NFT), checkpointed in the transfer hook.
@@ -83,13 +93,40 @@ session needs to know that the code doesn't say.
   enrol. Whitepaper §3.1 / §6.2 / §9 describe this; keep them in sync.
 - Runtime economics + identity (Runtime.t.sol): `ExecutionGuard.runtimeFeeOf`
   (owner-set ≤ `maxRuntimeFee`, paid post-trade from the traded book to the
-  executor, skipped if no base left — cannot extract); `RuntimeRegistry`
-  (executor key → self-reported measurement + enclave key; deployer approves;
-  `attested()` = registered + approved — labelled "self-reported, not
-  hardware-attested" everywhere); `TraderNFT.tokenURI` on-chain JSON + jar SVG.
-  The farm self-registers (`agent/src/measure.ts`), serves `/compose` +
-  `/health` on FARM_HTTP_PORT (sealed-generated from the browser), honours
-  FARM_MIN_FEE. `protocol/script/deploy-testnet.sh` for Polygon Amoy.
+  executor, skipped if no base left, bounded per day by the enforced cadence:
+  at most cadence × cap — cannot extract); `RuntimeRegistry` (executor key →
+  measurement + enclave key; `attestationOf` 0 none / 1 self-reported / 2
+  hardware; `attested()` = registered + deployer-approved measurement either
+  way; `hardwareAttested()` = approved + kind 2). `registerAttested(quote,
+  key)` goes through `IQuoteVerifier` (deployer-set): `AutomataDcapTdxVerifier`
+  wraps Automata DCAP (deployed on Polygon and Amoy at
+  0xaDdeC7e85c2182202b66E331f2a4A0bBB2cEEa1F; deploy-testnet.sh wires it),
+  parses the TD report out of the serialized Output (measurement =
+  keccak256(mrTd ‖ rtMr0..3), report data must equal keccak256(executor ‖
+  enclave key) — the farm prints that hash at start); mocks for tests.
+  `TraderNFT.tokenURI` on-chain JSON + jar SVG. The farm self-registers
+  (`agent/src/measure.ts`; FARM_QUOTE_PATH for the hardware path), serves
+  `/compose`, `/health`, `/ledger` on FARM_HTTP_PORT, honours FARM_MIN_FEE.
+  `protocol/script/deploy-testnet.sh` for Polygon Amoy.
+- **The farm pays for itself** (Aug 2026; docs/runtime-hosting.md): budget.ts
+  is the ledger (income = RuntimeFeePaid to this key, recomputed from logs;
+  costs = model tokens priced per model, gas priced via FARM_NATIVE_PRICE,
+  lease accrued at the host's rate; persisted to FARM_LEDGER_PATH). Policy:
+  a brain may consume FARM_GRACE (default 1 base unit) beyond what it paid;
+  past that it is paused until the owner *raises* the fee (the debt is written
+  off once; lowering changes nothing); the ledger reports the per-trade fee
+  that would have covered it and My Desk shows it. host.ts reads the machine
+  lease from an Oyster-compatible market (`jobs`/`jobDeposit`; Marlin MarketV1
+  on Arbitrum One 0x9d95D61eA056721E358BC49fE995caBF3B86A34B, USDC, rate per
+  second scaled by EXTRA_DECIMALS) and tops it up from the executor key's
+  float before it runs out (FARM_HOST=oyster|market; MockOysterMarket locally,
+  Deploy.s.sol deploys it last so the other addresses stay put; seed-dev.sh
+  opens a 0.12/h job and prints the farm command). bridge.ts is Circle CCTP
+  v2 (Polygon → Arbitrum One; mainnet-only in meaning: the testnet base asset
+  is a mock, not Circle's USDC). brain.ts has `GatewayBrain` (OpenAI-compatible
+  TEE inference gateway, INFERENCE_BASE_URL) next to `ClaudeBrain`; decide()
+  returns usage so ticks can be priced. agent/test/*.test.ts (`npm test`)
+  cover the arithmetic; the loop was exercised end to end on anvil.
 
 ## Related, outside this repo
 - Whitepaper artifact (private share link, same content as
@@ -109,15 +146,15 @@ session needs to know that the code doesn't say.
 - Buyback/AMM floor pool (base-asset denominated — NO native token, no
   burns, no stock distributions; deliberately rejected from StonkBrokers).
 - Terminal leaderboard page ("The Floor") fed by report.ts.
-- Real TEE for the enclave: **no AWS**; Intel TDX on a provider a bare EVM
-  key can rent and extend in USDC (Marlin Oyster CVM first, Phala Cloud as
-  dev/fallback), model calls via a USDC-paid TEE inference gateway, quotes
-  verified through Automata DCAP into RuntimeRegistry; the farm pays its own
-  lease from runtime fees (docs/runtime-hosting.md). Lit Protocol for
-  authored-custody
-  handoff.
-- Proof of Brain: attestation registry binding executor keys to reproducible
-  runtime measurements, so "AI-traded" is verifiable, not claimed.
+- Real TEE for the enclave: **no AWS**; the contract half (verifier adapter,
+  attested registration, labels) and the farm half (lease loop, gateway brain,
+  quote registration path) are built; what remains is operational: build the
+  farm image, `oyster-cvm deploy` it on an Intel TDX operator (Marlin Oyster
+  CVM first, Phala Cloud as dev/fallback), have it request a TDX quote with
+  the report data the farm prints, register it, reproduce and approve the
+  measurement, and fund a USDC-paid TEE inference gateway account. The farm
+  pays its own lease from runtime fees (docs/runtime-hosting.md). Lit Protocol
+  for authored-custody handoff.
 - Realized-only performance fees.
 - First live venue is **Polymarket** (Polygon; CTF Exchange, USDC collateral,
   binary outcome tokens) via a thin IVenue adapter — decided Aug 2026, replaces

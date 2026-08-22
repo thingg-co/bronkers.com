@@ -9,22 +9,26 @@ The Terminal is a zero-build, no-backend web app. It reads the chain over a
 public RPC and writes through the visitor's wallet. There is no server, no
 indexer and no database: every number on every page is recomputed from
 contract state and `TradeExecuted` logs, which is the point of the protocol.
+The one thing it reads from a process of ours is the farm's own books, over
+the farm's endpoint, and it says so where it shows them.
 
 It is organised around four jobs:
 
 | Tab | Who it is for | What it does |
 |---|---|---|
 | **The Floor** | anyone, no wallet needed | every brain, live, sortable by return / NAV / trades / age / bell reward; filter to open vaults, interns, yours, or bells worth ringing |
-| **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → start. Sealed custody by default, entirely in the browser; the last step publishes the jar on-chain, seeds the wallet, authorises the guard and enrols the brain with the enclave, so it is trading before you leave the page |
-| **My Desk** | owners, depositors, keepers | manage the brains you own, see your vault positions, ring bells that pay |
-| **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, a lever to move the mock market, the runtime command |
+| **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → start. Sealed custody by default, entirely in the browser; the last step publishes the jar on-chain, seeds the wallet, authorises the guard, sets the runtime fee and enrols the brain with the enclave, so it is trading before you leave the page |
+| **My Desk** | owners, depositors, keepers | manage the brains you own (including their runtime fee and their account with the enclave), see your vault positions, ring bells that pay |
+| **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, levers to move the mock market and the chain's clock, the farm's books, the runtime command |
 
 Clicking a brain opens its page: share-price return since inception, vault NAV,
 own-book value, trade count, max drawdown, a share-price chart, the internship
 progress for interns, the full trade table from logs, vault terms (fees,
-high-water mark, fee shares accrued to the jar, allowlist status, your
-position) and identity (owner, token-bound wallet, vault, executor, custody,
-commitment, model, traits). Deposit, withdraw and Ring the Bell live there.
+high-water mark, fee shares accrued to the jar, runtime fees paid, allowlist
+status, your position) and identity (owner, token-bound wallet, vault,
+executor and how it is attested, runtime fee and its daily bound, custody,
+commitment, model, declared cadence and the interval the guard enforces).
+Deposit, withdraw and Ring the Bell live there.
 
 ## How it behaves
 
@@ -50,26 +54,42 @@ address is not on it…". The raw log is one click away (console).
 (`publishEnvelope`, an event) and the brain is "enrolled" by setting the
 enclave's executor key (`setExecutor`). The farm (`agent: npm run farm`) is one
 process that runs every enrolled brain at its declared cadence and picks the
-book itself. My Desk and the brain page show the runtime status: *enrolled
-with the enclave · last trade · next tick*, *self-hosted* (authored custody),
-or *not running*, plus one-click enrol / unenrol and a publish-jar control for
-brains minted elsewhere.
+book itself. The declared cadence is enforced on-chain (`tradeIntervalOf`), so
+"next trade allowed" is a fact the page can state. My Desk and the brain page
+show the runtime status: *enrolled with the enclave · last trade · next tick*,
+*self-hosted* (authored custody), or *not running*, plus one-click enrol /
+unenrol and a publish-jar control for brains minted elsewhere.
+
+**The farm pays for itself, and shows its books.** A brain pays its executor a
+runtime fee per trade; the farm keeps an account per brain (fees received
+against what its ticks cost: model tokens and gas), pauses a brain that
+overruns its credit, and tops up the machine lease it runs on from the fees it
+collected. My Desk's Runtime panel reads `GET enclaveUrl/ledger?tokenId=` and
+shows the account: paid, cost, credit left, paused or running, and the
+per-trade fee that would have covered the brain so far (with a button to use
+it). The Developer tab's "The farm's books" panel reads `/health`: float,
+income, cost breakdown, net, the lease (time left, rate, paid so far). Both
+degrade to a sentence when the endpoint is not there; nothing on-chain depends
+on them.
 
 **Before you sign, you are told what happens.** The deposit modal shows the
 share price, estimated shares and the fee terms; the bell modal shows the
 pending management and performance fees and your 1% cut before you ring (via
 `TraderVault.pendingFees()`); promoting shows the fee; transferring warns that
-the brain's wallet goes with it.
+the brain's wallet goes with it; the fee field tells you the most the brain can
+pay per day.
 
 ## Files
 
 ```
 app.html                  shell: hero, tab bar, #view, console pane
-js/config.js              per-chain RPC, explorer, addresses, enclave public key
+js/config.js              per-chain RPC, explorer, addresses, enclave public key,
+                          enclave endpoint, host market
 js/terminal/main.js       hash router, header, window.__terminal debug handle
 js/terminal/chain.js      chain + wallet state; public client, injected / dev wallet
-js/terminal/data.js       reads: roster summaries, brain detail, trades from logs,
-                          NAV series (archive reads at trade blocks), snapshot fallback
+js/terminal/data.js       reads: roster summaries, brain detail, trades and runtime
+                          fees from logs, NAV series (archive reads at trade blocks),
+                          chain time, the farm's /health and /ledger, snapshot fallback
 js/terminal/actions.js    writes: step runner, revert translation, every on-chain action
 js/terminal/crypto.js     canonicalize + commit (frozen), authored (AES-GCM) and
                           sealed (X25519 → HKDF → AES-GCM) envelopes, WebCrypto only
@@ -78,6 +98,8 @@ js/terminal/venues.js     venue-aware trade/holding formatting (swap today; pred
 js/terminal/ui.js         DOM helper, formatting, sparkline, modal, toast, fields
 js/terminal/views/        floor.js · brain.js · create.js · desk.js · dev.js
 agent/src/farm.ts         the enclave runtime that runs every enrolled brain
+agent/src/budget.ts       the farm's ledger and credit policy
+agent/src/host.ts         the machine lease (Oyster-compatible market), read and topped up
 ```
 
 Everything is plain ES modules loaded straight from the page; `viem` comes from
@@ -85,7 +107,8 @@ esm.sh. No bundler, no framework.
 
 ## Contract surface the Terminal depends on
 
-Added for the Terminal (tests in `protocol/test/Views.t.sol`):
+Added for the Terminal (tests in `protocol/test/Views.t.sol` and
+`Runtime.t.sol`):
 
 - `TraderVault.pendingFees() → (mgmtShares, perfShares, bellReward)` — exactly
   what the next checkpoint would mint, so a keeper sees the reward before
@@ -98,10 +121,15 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol`):
   custody only; re-publishable.
 - `TraderNFT.tokenURI` — on-chain metadata with the jar image; the brain page
   renders it and links to the configured marketplace.
-- `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee` — the
-  per-trade reimbursement a brain pays its executor; shown and set in My Desk.
-- `RuntimeRegistry.runtimeOf / attested` — runtime identity for the
-  "attested runtime" / "registered runtime" / "operated" labels.
+- `TraderNFT.cadenceOf`, `ExecutionGuard.cadenceIntervalOf / tradeIntervalOf /
+  nextTradeAt` — the declared cadence and the interval the guard enforces
+  between trades (owner's `minTradeInterval` floored at 1 day / cadence).
+- `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee` and the
+  `RuntimeFeePaid` event — the per-trade reimbursement a brain pays its
+  executor; shown and set in My Desk, summed on the brain page.
+- `RuntimeRegistry.runtimeOf / attested / attestationOf / hardwareAttested` —
+  runtime identity for the "attested runtime · TDX quote" / "attested runtime ·
+  reviewed" / "registered runtime" / "operated" labels.
 
 Everything else was already public: `policyOf`, `tierOf`, `tiers`, `seasoned`,
 `tradeCountOf`, `firstTradeAt`, `seasonMinTrades`, `seasonDuration`, `tbaNav`,
@@ -129,19 +157,26 @@ envelope come out, and the prompt never exists outside the enclave process.
 ```bash
 anvil --silent &
 ./protocol/script/seed-dev.sh      # deploys, mints 3 brains in different states,
+                                   # opens the farm's lease on the mock market,
                                    # writes addresses + enclave key into js/config.js
 python3 dev-server.py              # http://127.0.0.1:8000/app
 ```
 
-The seed prints the dev keys. Paste one in the Developer tab (or open
-`/app?devkey=…`) to act as the owner or the LP. `protocol/script/demo.sh` is
-still the one-shot end-to-end demo; `seed-dev.sh` leaves the chain up.
+The seed prints the dev keys and the farm command (with the lease's job id).
+Paste a key in the Developer tab (or open `/app?devkey=…`) to act as the owner
+or the LP. Because the declared cadence is enforced on-chain, a brain that has
+just traded cannot trade again until its interval is up: the Developer tab's
+"Move the chain's clock" buttons (`evm_increaseTime` on anvil) skip ahead.
+`protocol/script/demo.sh` is still the one-shot end-to-end demo;
+`seed-dev.sh` leaves the chain up.
 
 ## Hosting
 
-`docs/runtime-hosting.md` is the research and decision on where the farm runs
-and who pays: no AWS; Intel TDX rented and extended in USDC by the farm's own
-key, inference via a USDC-paid TEE gateway, attestation via Automata DCAP.
+`docs/runtime-hosting.md` is the research, the decision and the runbook for
+where the farm runs and who pays: no AWS; an Intel TDX machine rented on a
+market a bare key can pay (Marlin Oyster), the lease read and topped up by the
+farm from runtime fees, inference from a USDC-paid TEE gateway, attestation
+through Automata DCAP into the RuntimeRegistry.
 
 ## Tooltips
 
@@ -157,9 +192,11 @@ it changes, and what it cannot change.
   `config.js`. The real work is the `IVenue` adapter over the CTF exchange
   and the TBA-as-order-signer; it also needs venue-per-brain at mint (today
   every brain uses the NFT's default venue).
-- Hardware attestation: the registry, labels and farm self-measurement are in
-  place; a TDX host (no AWS; see docs/runtime-hosting.md) adds the quote, verified
-  on-chain through Automata DCAP, over the same fields.
+- Hardware attestation, the operational half: the registry accepts a TDX
+  quote through the Automata adapter and the farm registers with one when
+  `FARM_QUOTE_PATH` is set; what is left is running the farm image on a TDX
+  operator and producing that quote (docs/runtime-hosting.md).
 - Public testnet: `protocol/script/deploy-testnet.sh` deploys to Polygon Amoy
-  with a funded key and prints the `config.js` block; then run the farm and
-  fill `enclavePublicKey` / `enclaveExecutor` / `enclaveUrl` from `/health`.
+  with a funded key (wiring Automata DCAP where it exists) and prints the
+  `config.js` block; then run the farm and fill `enclavePublicKey` /
+  `enclaveExecutor` / `enclaveUrl` from `/health`.
