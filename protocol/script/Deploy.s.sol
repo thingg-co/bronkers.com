@@ -74,9 +74,10 @@ contract Deploy is Script {
         // (0 locally; REVISION_NOTICE=86400 on public testnets)
         guard.setCamp(1, uint64(vm.envOr("REVISION_NOTICE", uint256(0))));
         // reaping: a dead brain (no shares, <= 1 base of NAV) idle this long can be
-        // reaped free or culled for a fee. 0 locally so the seed can reap on demand;
-        // REAP_DELAY=2592000 (30d) on public testnets. cullFee 10 base, dust 1 base.
-        guard.setReap(uint64(vm.envOr("REAP_DELAY", uint256(0))), vm.envOr("CULL_FEE", uint256(10e18)), vm.envOr("DUST_NAV", uint256(1e18)));
+        // reaped free or culled for a fee. Default 1h locally so the Developer
+        // clock lever can cross it and reaping is demonstrable; REAP_DELAY=2592000
+        // (30d) on public testnets; 0 disables reaping. cullFee 10 base, dust 1 base.
+        guard.setReap(uint64(vm.envOr("REAP_DELAY", uint256(3600))), vm.envOr("CULL_FEE", uint256(10e18)), vm.envOr("DUST_NAV", uint256(1e18)));
 
         // "a couple of markets": exactly two curated pairs (WETH/USDC,
         // WBTC/USDC) on one curated venue — owners cannot add more
