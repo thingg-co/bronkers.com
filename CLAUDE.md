@@ -16,7 +16,9 @@ session needs to know that the code doesn't say.
 
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the
-   internship, Ring the Bell, "sell the whole guy", "it pays its own rent").
+   internship, Ring the Bell, "sell all of jar", "jar pays jar's own rent"). A
+   Brokner's pronouns are jar/jarself, declared with a joke in the landing
+   hero and used throughout the landing copy; docs and the paper say "agent".
    Contracts, tests, and docs stay rigorous and deadpan. The "Silly Copy.
    Serious Code." table on index.html maps every meme claim to its enforcing
    invariant — keep it true.

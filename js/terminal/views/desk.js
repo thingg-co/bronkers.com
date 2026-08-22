@@ -144,7 +144,7 @@ async function manage(brain, refresh) {
     } }, `Toggle ${h.sym}`))));
 
   // fees + sell
-  const toField = textField({ label: "Transfer to (sell the whole guy)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital.", tip: TIPS.transfer });
+  const toField = textField({ label: "Transfer to (sell all of jar)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital.", tip: TIPS.transfer });
   const feesPanel = mk("Fees & sale",
     kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`], ["Marketplace", state.cfg.marketplace ? el("a", { href: state.cfg.marketplace.replace("{nft}", state.cfg.traderNFT).replace("{id}", String(brain.id)), target: "_blank", rel: "noopener" }, "list or view it") : el("span", { class: "muted" }, "the token has on-chain metadata (name, traits, jar image); any ERC-721 marketplace renders it — none is configured for this chain")]]),
     el("div", { class: "btn-row" },
