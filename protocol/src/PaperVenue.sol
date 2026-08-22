@@ -33,7 +33,7 @@ contract PaperVenue is IVenue {
     mapping(address => AggregatorV3Interface) public feedOf; // token -> USD feed
     mapping(address => uint256) public fixedUsd; // token -> fixed USD price (1e18), for the base asset
     uint16 public spreadBps = 10; // the house takes 0.10%
-    uint256 public maxStale = 1 hours; // a feed older than this is refused; 0 = never refuse
+    uint256 public maxStale; // a feed older than this is refused; 0 (default) = never refuse (mock feeds; a real deployment sets it)
 
     event FeedSet(address indexed token, address feed);
     event FixedUsdSet(address indexed token, uint256 usd);

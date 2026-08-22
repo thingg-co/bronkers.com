@@ -36,6 +36,7 @@ contract PaperTest is Test {
         venue = new PaperVenue();
         venue.setFixedUsd(address(usdc), 1e18);
         venue.setFeed(address(weth), address(ethFeed));
+        venue.setMaxStale(1 hours); // exercise staleness; a real deployment sets this, mock-fed anvil leaves it 0
 
         ERC6551Registry registry = new ERC6551Registry();
         ERC6551Account accountImpl = new ERC6551Account();
