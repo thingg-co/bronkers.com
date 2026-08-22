@@ -1,7 +1,7 @@
 // Write side. Every on-chain action goes through runSteps(): a small modal
 // that narrates each transaction (approve, then deposit…), shows hashes, and
 // translates reverts into sentences a person can act on.
-import { decodeEventLog, encodeFunctionData, maxUint256, parseUnits } from "https://esm.sh/viem@2.21.19";
+import { decodeEventLog, encodeFunctionData, maxUint256, parseUnits, stringToHex } from "https://esm.sh/viem@2.21.19";
 import { erc20Abi, guardAbi, nftAbi, tbaAbi, vaultAbi } from "./abi.js";
 import { explorerTx, state } from "./chain.js";
 import { invalidate } from "./data.js";
@@ -142,6 +142,19 @@ export async function promote(brain) {
 
 export const christen = (id, name) => [{ label: `Name brain #${id} “${name}”`, run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "christen", args: [BigInt(id), name] }) }];
 export const setExecutor = (id, addr) => [{ label: `Set executor key`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), addr] }) }];
+export const ZERO = "0x0000000000000000000000000000000000000000";
+/** Enrolling with the enclave is nothing more than making its key the executor. */
+export function enrol(id) {
+  const ex = state.cfg.enclaveExecutor;
+  if (!ex) throw new Error("No enclave executor is configured for this chain (Developer tab).");
+  return [{ label: "Enrol with the enclave (set its key as executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ex] }) }];
+}
+export const unenrol = (id) => [{ label: "Unenrol (clear the executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ZERO] }) }];
+/** Put the sealed jar on-chain (as an event) so the enclave can find it without a file handoff. */
+export function publishEnvelope(id, envelopeObj) {
+  const bytes = stringToHex(typeof envelopeObj === "string" ? envelopeObj : JSON.stringify(envelopeObj));
+  return [{ label: "Publish the sealed jar on-chain", run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "publishEnvelope", args: [BigInt(id), bytes] }) }];
+}
 export const setPolicy = (id, notionalBps, slippageBps, interval) => [{ label: `Update trading limits`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setPolicy", args: [BigInt(id), notionalBps, slippageBps, BigInt(interval)] }) }];
 export const setTokenAllowed = (id, token, allowed) => [{ label: `${allowed ? "Enable" : "Disable"} a market`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setTokenAllowed", args: [BigInt(id), token, allowed] }) }];
 export const setAllowlistEnabled = (brain, enabled) => [{ label: enabled ? "Close the vault to the allowlist" : "Open the vault to anyone", run: () => tx({ address: brain.vault, abi: vaultAbi, functionName: "setAllowlistEnabled", args: [enabled] }) }];

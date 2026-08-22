@@ -9,9 +9,16 @@ import { invalidate } from "../data.js";
 import { clear, el, fmt, kv, textField, toast } from "../ui.js";
 
 const FIELDS = [
-  ["rpc", "RPC URL"], ["explorer", "Explorer URL (optional)"],
-  ["traderNFT", "TraderNFT"], ["guard", "ExecutionGuard"], ["router", "Venue / router"],
-  ["usdc", "mUSDC"], ["weth", "mWETH"], ["wbtc", "mWBTC"], ["enclavePublicKey", "Enclave public key (base64 SPKI, for sealed mints)"],
+  ["rpc", "RPC URL", "JSON-RPC endpoint the Terminal reads from (and a dev wallet writes to). Public RPCs are fine; archive reads make the charts richer."],
+  ["explorer", "Explorer URL (optional)", "Base URL for address/tx links, e.g. https://amoy.polygonscan.com"],
+  ["traderNFT", "TraderNFT", "The brain collection. Printed by Deploy.s.sol."],
+  ["guard", "ExecutionGuard", "The trust boundary: the only contract the executor key can usefully call."],
+  ["router", "Venue / router", "The curated venue brains trade through (MockSwapRouter locally)."],
+  ["usdc", "mUSDC", "Base asset and vault collateral."],
+  ["weth", "mWETH", "Curated market token."],
+  ["wbtc", "mWBTC", "Curated market token."],
+  ["enclavePublicKey", "Enclave public key (base64 SPKI)", "X25519 key sealed brains are encrypted to. From `npm run genome -- keygen` (seed-dev.sh writes it here)."],
+  ["enclaveExecutor", "Enclave executor address", "The farm's hot key. Enrolling a brain means setting this as its executor; the farm then runs it."],
 ];
 
 export async function render(root) {
@@ -23,8 +30,8 @@ export async function render(root) {
     Object.values(all).map((c) => el("option", { value: c.id, selected: c.id === state.chainId }, `${c.name} (${c.id})`)));
 
   const inputs = {};
-  const form = el("div", { class: "dev-grid" }, FIELDS.map(([k, label]) => {
-    const f = textField({ label, value: cfg[k] || "", mono: true });
+  const form = el("div", { class: "dev-grid" }, FIELDS.map(([k, label, tipText]) => {
+    const f = textField({ label, value: cfg[k] || "", mono: true, tip: tipText });
     inputs[k] = f;
     return f.el;
   }));
@@ -47,7 +54,7 @@ export async function render(root) {
   const reset = el("button", { class: "btn", onclick: async () => { clearOverride(state.chainId); invalidate(); await reload(); toast("Reset to config.js", "ok"); render(root); } }, "Reset to defaults");
 
   // dev wallet
-  const keyField = textField({ label: "Dev private key (local test chains only; kept in sessionStorage)", placeholder: "0x…", mono: true, type: "password" });
+  const keyField = textField({ label: "Dev private key (local test chains only; kept in sessionStorage)", placeholder: "0x…", mono: true, type: "password", tip: "A raw private key to sign with instead of a browser wallet. Anvil prints ten at startup. Never use a key that holds real funds." });
   const devBtns = el("div", { class: "btn-row" },
     el("button", { class: "btn", disabled: !cfg.testnet, onclick: async () => {
       try { await connectDev(keyField.value()); toast("Dev wallet connected", "ok"); render(root); } catch (e) { toast(act.explain(e), "err"); }
@@ -55,7 +62,7 @@ export async function render(root) {
     state.account ? el("button", { class: "btn", onclick: () => { disconnect(); render(root); } }, "Disconnect") : null);
 
   // faucet + market lever
-  const faucetAmt = textField({ label: "Faucet amount (mUSDC)", value: "10000" });
+  const faucetAmt = textField({ label: "Faucet amount (mUSDC)", value: "10000", tip: "Mints mock USDC to your connected address. Test chains only." });
   const faucetBtn = el("button", { class: "btn", disabled: !state.account || !cfg.testnet, onclick: async () => {
     const ok = await act.runSteps("Faucet", act.faucet(faucetAmt.value() || "10000"));
     if (ok) { invalidate(); }
@@ -93,6 +100,9 @@ export async function render(root) {
     el("div", { class: "panel" }, el("h4", {}, "Testnet helpers"), el("div", { class: "two-col" },
       el("div", {}, faucetAmt.el, faucetBtn),
       el("div", {}, el("p", { class: "field-label" }, "Move the mock market"), priceInfo, priceRow))),
-    el("div", { class: "panel" }, el("h4", {}, "Runtime"), el("p", { class: "muted" }, "To make a brain trade against this chain, run the agent with its genome file:"),
-      el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TOKEN_ID=<id> TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} GENOME_PATH=./genome.local.json \\\n  EXECUTOR_PRIVATE_KEY=<executor key> [ENCLAVE_PRIVATE_KEY=… | GENOME_KEY=…] \\\n  npm run loop -- --once --mock-brain`))));
+    el("div", { class: "panel" }, el("h4", {}, "Runtime"),
+      el("p", { class: "muted" }, "The farm is the enclave process that runs every brain enrolled with its key (sealed custody, jar published on-chain). One process, all brains:"),
+      el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} \\\n  EXECUTOR_PRIVATE_KEY=<key for ${cfg.enclaveExecutor || "the enclave executor"}> ENCLAVE_PRIVATE_KEY=<enclave sealing key> \\\n  npm run farm -- --mock-brain`)),
+      el("p", { class: "muted" }, "Authored brains are self-hosted by their owner, one process per brain, with the jar file and GENOME_KEY:"),
+      el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TOKEN_ID=<id> TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} GENOME_PATH=./brain-<hash>.authored.json \\\n  GENOME_KEY=<key> EXECUTOR_PRIVATE_KEY=<executor key> npm run loop -- --mock-brain`))));
 }

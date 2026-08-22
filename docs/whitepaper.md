@@ -108,6 +108,15 @@ exposing it. Mode 2 goes further still: the resulting agent is one whose strateg
 human has read, identified only by its commitment and evaluated only by its record.
 Sealing is the default in the prototype.
 
+A sealed envelope has no reason to live on the creator's machine. Once minted, the owner
+publishes it on-chain through `TraderNFT.publishEnvelope`, which emits it as an event
+(`EnvelopePublished`) rather than writing it to storage; a kilobyte of ciphertext costs
+a few thousand gas. The enclave locates envelopes by scanning these events, so no file
+is ever handed to an operator. Publication is restricted to sealed custody, since an
+authored envelope opens only with the owner's key and publishing it would serve no
+purpose, and it may be repeated, for instance to re-seal to a new enclave key; the
+commitment the enclave verifies against never changes.
+
 ## 4. Token-Bound Ownership
 
 Each token controls a wallet of its own through the ERC-6551 token-bound account
@@ -247,6 +256,31 @@ the ideal instrument and are not presently practical for frontier-model inferenc
 Until attestation is deployed, "AI-traded" is an operator claim, and the prototype
 labels it as one.
 
+### 6.2 Enrolment and the enclave runtime
+
+Nothing in the design requires a creator to operate anything. The enclave runs as a
+single long-lived process, which we call the farm, holding one executor key per
+deployment. An owner enrols a brain by setting that key as the brain's executor through
+the guard's existing `setExecutor`; no new contract is involved, and the enrolment is
+visible to anyone who reads the policy. Un-enrolment is the same call with a different
+key. Because the guard restricts the executor key to `executeTrade`, enrolment hands the
+enclave exactly the power to trade within policy and nothing else.
+
+On each pass the farm reads the chain: for every token whose executor is its key, it
+finds the latest published envelope, opens it with the enclave private key, verifies the
+plaintext against the genome commitment, and refuses to run anything that does not
+match. It then runs each enrolled brain at the brain's declared cadence, choosing the
+book itself: the brain's own wallet during the paper season, the vault once the brain is
+seasoned and the vault holds assets, and nothing at all if neither holds funds or the
+wallet has not authorised the guard. The farm keeps no state of its own; the chain is
+the state, and a restart resumes from the last recorded trade. Brains under authored
+custody cannot be run by the farm, since only the owner holds the key, and remain self-
+hosted.
+
+In the prototype the operator bears gas and model costs. Reimbursing them from the
+brain's own wallet through the guard is the natural extension and is deferred to the
+next version.
+
 ## 7. Verifiability of the Record
 
 Every execution emits a `TradeExecuted` event carrying the agent identifier, venue,
@@ -301,7 +335,9 @@ what can be read from chain state:
 3. Vault state: NAV, share supply, fee parameters, high-water mark, and accrued fee
    shares held in the wallet.
 4. The current executor address, which should be rotated immediately after purchase,
-   since the seller's runtime knew the previous key.
+   since the seller's runtime knew the previous key; and whether the brain is enrolled
+   with the enclave (executor equal to the published enclave key) with a published
+   envelope, or self-hosted.
 5. The track record itself, recomputed from events rather than taken from a marketplace
    summary.
 
@@ -356,6 +392,11 @@ period. A disputed or delayed resolution holds capital, and a resolution the age
 regards as wrong is a loss it cannot hedge. The order book is operated off-chain, so the
 liveness of order placement depends on the venue even though settlement and custody do
 not.
+
+**Runtime liveness.** An enrolled brain trades only while the enclave operator keeps
+the farm running. If it stops, the brain idles; nothing is lost, depositors can still
+withdraw, and the owner can unenrol and run the brain elsewhere. Attested execution
+would let a buyer verify the runtime; it would not by itself guarantee liveness.
 
 **MEV.** Agent trades are visible intents. Tight slippage bounds and size caps limit
 the damage; production should route through private order flow.

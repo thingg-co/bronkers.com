@@ -133,6 +133,12 @@ export function kv(rows) {
   ]));
 }
 
+/** A small ⓘ with a native tooltip; keyboard-focusable so the hint is reachable without a mouse. */
+export function tip(text) {
+  if (!text) return null;
+  return el("span", { class: "tip", tabindex: "0", role: "note", title: text, "aria-label": text }, "ⓘ");
+}
+
 export function copyBtn(text, label = "copy") {
   return el("button", {
     class: "btn-ghost tiny", type: "button", title: "Copy to clipboard",
@@ -229,21 +235,21 @@ export function modal({ title, body, actions = [], onClose, wide = false }) {
 }
 
 /** Amount input with a "max" helper. Returns {el, value()} where value() is the raw string. */
-export function amountField({ label, max, maxLabel, placeholder = "0.00", sym = "mUSDC", value = "" }) {
-  const input = el("input", { type: "text", inputmode: "decimal", placeholder, value, class: "amount" });
+export function amountField({ label, max, maxLabel, placeholder = "0.00", sym = "mUSDC", value = "", tip: tipText }) {
+  const input = el("input", { type: "text", inputmode: "decimal", placeholder, value, class: "amount", title: tipText || null });
   const maxBtn = max != null ? el("button", { type: "button", class: "btn-ghost tiny", onclick: () => { input.value = max; input.dispatchEvent(new Event("input")); } }, maxLabel || `max ${max}`) : null;
   const wrap = el("label", { class: "field" },
-    el("span", { class: "field-label" }, label, maxBtn),
+    el("span", { class: "field-label" }, el("span", {}, label, " ", tip(tipText)), maxBtn),
     el("span", { class: "field-input" }, input, el("span", { class: "field-sym" }, sym)));
   return { el: wrap, input, value: () => input.value.trim() };
 }
 
-export function textField({ label, placeholder = "", value = "", hint, type = "text", mono = false, rows }) {
+export function textField({ label, placeholder = "", value = "", hint, type = "text", mono = false, rows, tip: tipText }) {
   const input = rows
-    ? el("textarea", { placeholder, rows, class: mono ? "mono" : "" }, value)
-    : el("input", { type, placeholder, value, class: mono ? "mono" : "" });
+    ? el("textarea", { placeholder, rows, class: mono ? "mono" : "", title: tipText || null }, value)
+    : el("input", { type, placeholder, value, class: mono ? "mono" : "", title: tipText || null });
   const wrap = el("label", { class: "field" },
-    el("span", { class: "field-label" }, label),
+    el("span", { class: "field-label" }, el("span", {}, label, " ", tip(tipText))),
     input,
     hint ? el("span", { class: "field-hint" }, hint) : null);
   return { el: wrap, input, value: () => input.value.trim() };

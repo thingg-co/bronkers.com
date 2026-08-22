@@ -235,9 +235,10 @@ export async function loadBrain(id, { force } = {}) {
       return { token: t, sym, vaultBal, tbaBal };
     }),
   );
-  const [feeSharesValue, trades] = await Promise.all([
+  const [feeSharesValue, trades, envelopeLogs] = await Promise.all([
     read(b.vault, vaultAbi, "convertToAssets", [feeShares]),
     loadTrades(id, b.genome.birthBlock),
+    state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "EnvelopePublished", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
   ]);
   const series = await navSeries(b, trades);
   const brain = {
@@ -256,6 +257,8 @@ export async function loadBrain(id, { force } = {}) {
     tbaUsdc,
     vaultUsdc,
     tbaAuthorised: tbaAllowance > 0n,
+    envelopePublished: envelopeLogs.length > 0,
+    runtime: runtimeStatus(policy[0], Number(policy[4]), b),
     my: { shares: b.myShares, assets: myAssets, usdc: myUsdc, allowance: myAllowance },
     trades,
     series,
@@ -263,6 +266,16 @@ export async function loadBrain(id, { force } = {}) {
   };
   cache.brains.set(id, brain);
   return brain;
+}
+
+/** Who is running this brain, as far as the chain can tell. */
+export function runtimeStatus(executor, lastTradeAt, b) {
+  const zero = "0x0000000000000000000000000000000000000000";
+  const enclave = (state.cfg.enclaveExecutor || "").toLowerCase();
+  const kind = !executor || executor === zero ? "none" : enclave && executor.toLowerCase() === enclave ? "enclave" : "self";
+  const intervalSec = Math.max(60, Math.floor(86400 / Math.max(1, Number(b.genome.cadence))));
+  const nextDue = lastTradeAt ? lastTradeAt + intervalSec : null;
+  return { kind, lastTradeAt, nextDue, intervalSec };
 }
 
 /** Static fallback when no chain is reachable: data/traders.json from report.ts. */

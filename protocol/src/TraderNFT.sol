@@ -59,6 +59,12 @@ contract TraderNFT is ERC721, ITraderNFT {
         uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault
     );
     event Christened(uint256 indexed tokenId, string name);
+    /// The sealed genome envelope, published as calldata so the enclave can
+    /// find it by scanning logs. It is ciphertext only the enclave key opens;
+    /// the plaintext still never touches the chain.
+    event EnvelopePublished(uint256 indexed tokenId, bytes envelope);
+
+    uint256 public constant MAX_ENVELOPE_BYTES = 16 * 1024;
 
     constructor(
         IERC6551Registry registry_,
@@ -145,6 +151,19 @@ contract TraderNFT is ERC721, ITraderNFT {
     /// @notice The brain's name, or "" if it has none yet.
     function nameOf(uint256 tokenId) external view returns (string memory) {
         return _names[tokenId];
+    }
+
+    /// @notice Publish the sealed envelope so an enclave can run the brain
+    /// without anyone handing it a file. Owner-only; sealed custody only (an
+    /// authored envelope opens with the owner's key, so publishing it would
+    /// be pointless). May be re-published, e.g. re-sealed to a new enclave
+    /// key: the latest event wins, and the commitment the enclave verifies
+    /// against never changes.
+    function publishEnvelope(uint256 tokenId, bytes calldata envelope) external {
+        require(msg.sender == ownerOf(tokenId), "Trader: not owner");
+        require(_genomes[tokenId].custody != CUSTODY_AUTHORED, "Trader: not sealed");
+        require(envelope.length > 0 && envelope.length <= MAX_ENVELOPE_BYTES, "Trader: envelope size");
+        emit EnvelopePublished(tokenId, envelope);
     }
 
     /// @dev On every real transfer: crystallize accrued vault fees under the

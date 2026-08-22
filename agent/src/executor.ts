@@ -30,7 +30,7 @@ export async function prepare(intent: TradeIntent, snapshot: MarketSnapshot): Pr
         address: config.guard,
         abi: guardAbi,
         functionName: "tokenAllowed",
-        args: [config.tokenId, t],
+        args: [snapshot.tokenId, t],
       }),
     ),
   );
@@ -59,7 +59,7 @@ export async function prepare(intent: TradeIntent, snapshot: MarketSnapshot): Pr
   return { tokenIn, tokenOut, amountIn, minAmountOut, fromVault: snapshot.book === "vault" };
 }
 
-export async function execute(trade: PreparedTrade): Promise<`0x${string}`> {
+export async function execute(trade: PreparedTrade, tokenId: bigint = config.tokenId): Promise<`0x${string}`> {
   const wallet = walletClient();
   const { request } = await publicClient.simulateContract({
     account: wallet.account,
@@ -67,7 +67,7 @@ export async function execute(trade: PreparedTrade): Promise<`0x${string}`> {
     abi: guardAbi,
     functionName: "executeTrade",
     args: [
-      config.tokenId,
+      tokenId,
       config.router,
       trade.tokenIn,
       trade.tokenOut,

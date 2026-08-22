@@ -6,6 +6,9 @@ export const traderNftAbi = parseAbi([
   "function accountOf(uint256 tokenId) view returns (address)",
   "function vaultOf(uint256 tokenId) view returns (address)",
   "function ownerOf(uint256 tokenId) view returns (address)",
+  "function nameOf(uint256 tokenId) view returns (string)",
+  "function nextId() view returns (uint256)",
+  "event EnvelopePublished(uint256 indexed tokenId, bytes envelope)",
 ]);
 
 export const guardAbi = parseAbi([
@@ -33,5 +36,6 @@ export const venueAbi = parseAbi([
 
 export const erc20Abi = parseAbi([
   "function balanceOf(address) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
   "function symbol() view returns (string)",
 ]);

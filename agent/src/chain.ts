@@ -47,6 +47,7 @@ export interface Policy {
 export type Book = "vault" | "own";
 
 export interface MarketSnapshot {
+  tokenId: bigint;
   book: Book;
   base: Address;
   baseSymbol: string;
@@ -57,8 +58,8 @@ export interface MarketSnapshot {
 }
 
 /** Everything the brain is allowed to see: balances, quotes, and its own limits. */
-export async function snapshot(book: Book): Promise<MarketSnapshot> {
-  const { tokenId, nft, guard, router } = config;
+export async function snapshot(book: Book, tokenId: bigint = config.tokenId): Promise<MarketSnapshot> {
+  const { nft, guard, router } = config;
   const [vault, tba] = await Promise.all([
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "vaultOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "accountOf", args: [tokenId] }),
@@ -90,6 +91,7 @@ export async function snapshot(book: Book): Promise<MarketSnapshot> {
   );
   const [executor, maxNotionalBps, maxSlippageBps, minTradeInterval, lastTradeAt] = rawPolicy;
   return {
+    tokenId,
     book,
     base,
     baseSymbol,

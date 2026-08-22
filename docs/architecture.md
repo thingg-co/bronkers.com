@@ -68,6 +68,9 @@ struct Genome {
 - `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)` — getters.
 - `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
   record cannot be laundered by renaming.
+- `publishEnvelope(id, bytes)` — owner-only, sealed custody only, ≤ 16 KB; emits
+  `EnvelopePublished(id, envelope)` (an event, not storage) so the enclave can find the
+  sealed jar by scanning logs. Re-publishable; the commitment never changes.
 - `_update()` override — checkpoints the vault's fee accrual before every transfer, so
   accrued-but-unminted fees are crystallized under the seller's watch.
 - **No genome mutation path exists.** Immutability = provenance.
@@ -221,6 +224,17 @@ load config → SecretStore.decrypt(genome) → verify hash vs on-chain commitme
   owner key never touches the runtime.
 - `report.ts` scans `TradeExecuted`/`Deposit` events and writes `data/traders.json`
   for the static site — the site renders, never computes.
+
+### 4a. The farm (`agent/src/farm.ts`)
+
+One enclave process for every enrolled brain. Enrolment is `setExecutor(tokenId,
+farmKey)`; the farm polls the chain, and for each token whose executor is its key it
+takes the latest `EnvelopePublished` envelope, unseals it with `ENCLAVE_PRIVATE_KEY`,
+verifies `commit(genome) == commitment`, and runs the brain at its declared cadence.
+Book selection: own wallet while unseasoned, vault once seasoned and funded, idle if
+neither holds funds or the wallet has not approved the guard. No persistence: it
+resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via
+`npm run loop`). Flags `--once`, `--mock-brain`, `--dry-run`; `FARM_POLL_SECONDS`.
 
 ## 4b. The Terminal
 

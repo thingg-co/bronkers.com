@@ -4,7 +4,19 @@ import * as act from "../actions.js";
 import { TIERS } from "../abi.js";
 import { state } from "../chain.js";
 import { invalidate, loadBrain, loadRoster, ringable } from "../data.js";
-import { addrChip, amountField, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, toast } from "../ui.js";
+import { addrChip, amountField, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, tip, toast } from "../ui.js";
+
+const TIPS = {
+  fund: "mUSDC sent here is the brain's own book. It trades this during the internship; you can sweep it back any time.",
+  executor: "The hot key the runtime signs with. It can only call executeTrade and can never move funds out. Enrolling sets it to the enclave's key; rotate it after buying a brain.",
+  name: "Permanent and public. 32 bytes max.",
+  allow: "Addresses allowed to deposit while the vault is allowlist-only.",
+  notional: "Largest single trade as a share of NAV, in basis points (2500 = 25%). Capped by the seat.",
+  slippage: "How far below the venue quote the executor may accept, in basis points (100 = 1%).",
+  interval: "Minimum seconds between trades, enforced on-chain. 0 = no limit beyond the declared cadence.",
+  transfer: "Sends the token. Everything in the brain's wallet goes with it; sweep first to keep the capital.",
+  jar: "The sealed envelope (.sealed.json) this brain was minted with. Publishing puts the ciphertext on-chain so an enclave can run the brain.",
+};
 import { custodyBadge, jar, statusBadge } from "./floor.js";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -14,12 +26,12 @@ async function run(title, steps, refresh, summary) {
   if (ok) await refresh();
 }
 
-function manage(brain, refresh) {
+async function manage(brain, refresh) {
   const mk = (title, ...children) => el("div", { class: "panel" }, el("h4", {}, title), ...children);
   const ex = state.cfg.explorer;
 
   // wallet (own book)
-  const fundField = amountField({ label: "Fund the brain's wallet", max: formatUnits(brain.my.usdc, 18), maxLabel: `balance ${fmt.amt(brain.my.usdc)}` });
+  const fundField = amountField({ label: "Fund the brain's wallet", max: formatUnits(brain.my.usdc, 18), maxLabel: `balance ${fmt.amt(brain.my.usdc)}`, tip: TIPS.fund });
   const walletPanel = mk("The brain's wallet (its own book)",
     kv([
       ["Address", addrChip(brain.tba, { explorer: ex })],
@@ -34,15 +46,37 @@ function manage(brain, refresh) {
       brain.holdings.filter((h) => h.tbaBal > 0n).map((h) => el("button", { class: "btn", onclick: () => run("Sweep", act.sweep(brain, h.token, h.tbaBal, h.sym), refresh) }, `Sweep ${fmt.amt(h.tbaBal, 18, 4)} ${h.sym}`))),
     el("div", { class: "inline-form" }, fundField.el, el("button", { class: "btn", onclick: async () => { try { await run("Fund", act.fundTba(brain, fundField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Send")));
 
-  // runtime
-  const execField = textField({ label: "Executor key (address)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, hint: "The hot key the runtime signs with. It can only call executeTrade. If you bought this brain, rotate it now." });
+  // runtime: who runs this brain, and the one-click way to hand it to the enclave
+  const rt = brain.runtime;
+  const sealed = brain.genome.custody !== 0;
+  const enclaveCfg = state.cfg.enclaveExecutor;
+  const rtBadge = rt.kind === "enclave" ? badge("Enrolled with the enclave", "good") : rt.kind === "self" ? badge("Self-hosted", "accent") : badge("Not running", "bad");
+  const now = Math.floor(Date.now() / 1000);
+  const nextText = rt.nextDue ? (rt.nextDue > now ? `in about ${fmt.duration(rt.nextDue - now)}` : "due on the next pass") : "on the next pass";
+  const execField = textField({ label: "Executor key (advanced)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, tip: TIPS.executor });
+  const jarInput = el("input", { type: "file", accept: ".json,application/json", class: "jarfile", title: TIPS.jar });
   const runtimePanel = mk("Runtime",
-    kv([["Current executor", brain.policy.executor === ZERO ? badge("not set", "bad") : addrChip(brain.policy.executor, { explorer: ex })]]),
-    el("div", { class: "inline-form" }, execField.el, el("button", { class: "btn", onclick: () => { const a = execField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err"); run("Set executor", act.setExecutor(brain.id, a), refresh); } }, "Set")),
-    el("p", { class: "muted small" }, "Start the runtime with the command in the Developer tab. Cadence declared: ", `${brain.genome.cadence}/day.`));
+    el("div", { class: "runtime-status" }, rtBadge, rt.kind !== "none" ? el("span", { class: "muted" }, `last trade ${rt.lastTradeAt ? fmt.when(rt.lastTradeAt) : "never"} · next tick ${nextText}`) : el("span", { class: "muted" }, "nobody is running this brain")),
+    kv([
+      ["Executor", brain.policy.executor === ZERO ? badge("not set", "muted") : addrChip(brain.policy.executor, { explorer: ex })],
+      ["Declared cadence", `${brain.genome.cadence}/day (every ${fmt.duration(rt.intervalSec)})`],
+      ["Jar", sealed ? (brain.envelopePublished ? badge("published on-chain", "good") : badge("not published", "bad")) : "with you (authored custody — you run it)"],
+    ]),
+    sealed && !brain.envelopePublished ? el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Publish the sealed jar ", tip(TIPS.jar))), jarInput), el("button", { class: "btn", onclick: async () => {
+      const f = jarInput.files && jarInput.files[0]; if (!f) return toast("Choose the .sealed.json file first.", "err");
+      const text = await f.text();
+      try { const o = JSON.parse(text); if (o.v !== 2 || o.mode !== "sealed") throw new Error("not a sealed envelope"); } catch (e) { return toast("That file is not a sealed jar.", "err"); }
+      run("Publish the jar", act.publishEnvelope(brain.id, text), refresh);
+    } }, "Publish")) : null,
+    el("div", { class: "btn-row" },
+      sealed && enclaveCfg && rt.kind !== "enclave" ? el("button", { class: "btn primary", disabled: !brain.envelopePublished, title: brain.envelopePublished ? "Set the enclave's key as executor; it starts running the brain on its next pass" : "Publish the jar first", onclick: () => run("Enrol", act.enrol(brain.id), refresh) }, "Enrol with the enclave") : null,
+      rt.kind === "enclave" ? el("button", { class: "btn", onclick: () => run("Unenrol", act.unenrol(brain.id), refresh) }, "Unenrol") : null,
+      !sealed ? el("a", { class: "btn", href: "#/dev" }, "Self-host command (Developer tab)") : null),
+    el("details", { class: "adv" }, el("summary", {}, "Set the executor by hand"),
+      el("div", { class: "inline-form" }, execField.el, el("button", { class: "btn", onclick: () => { const a = execField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err"); run("Set executor", act.setExecutor(brain.id, a), refresh); } }, "Set"))));
 
   // identity: name + seat
-  const nameField = textField({ label: "Name (permanent)", placeholder: "Umbra" });
+  const nameField = textField({ label: "Name (permanent)", placeholder: "Umbra", tip: TIPS.name });
   const seatPanel = mk("Seat & name",
     kv([["Seat", `${TIERS[brain.tier]} · per-trade cap ${fmt.bps(brain.policy.maxNotionalBps)} of NAV`], ["Name", brain.name || badge("unnamed", "muted")]]),
     el("div", { class: "btn-row" },
@@ -54,7 +88,7 @@ function manage(brain, refresh) {
     !brain.name ? el("div", { class: "inline-form" }, nameField.el, el("button", { class: "btn", onclick: () => { const n = nameField.value(); if (!n) return; run("Name", act.christen(brain.id, n), refresh); } }, "Christen")) : null);
 
   // depositors
-  const addrField = textField({ label: "Allow a depositor", placeholder: "0x…", mono: true });
+  const addrField = textField({ label: "Allow a depositor", placeholder: "0x…", mono: true, tip: TIPS.allow });
   const depositorsPanel = mk("Depositors",
     kv([["Vault", brain.allowlistEnabled ? "allowlist only" : "open to anyone"], ["AUM", fmt.usd(brain.nav)], ["Season", brain.seasoned ? "seasoned — accepting deposits" : "intern — deposits closed"]]),
     el("div", { class: "btn-row" },
@@ -62,9 +96,9 @@ function manage(brain, refresh) {
     brain.allowlistEnabled ? el("div", { class: "inline-form" }, addrField.el, el("button", { class: "btn", onclick: () => { const a = addrField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err"); run("Allow depositor", act.setDepositAllowed(brain, a, true), refresh); } }, "Allow")) : null);
 
   // limits + markets
-  const notional = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxNotionalBps });
-  const slippage = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxSlippageBps });
-  const interval = el("input", { type: "number", min: 0, value: brain.policy.minTradeInterval });
+  const notional = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxNotionalBps, title: TIPS.notional });
+  const slippage = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxSlippageBps, title: TIPS.slippage });
+  const interval = el("input", { type: "number", min: 0, value: brain.policy.minTradeInterval, title: TIPS.interval });
   const limitsPanel = mk("Trading limits",
     el("p", { class: "muted small" }, "You can tune below your seat's ceiling, never above. Markets can be switched off, and only curated ones switched back on."),
     el("div", { class: "three-col" },
@@ -78,7 +112,7 @@ function manage(brain, refresh) {
     } }, `Toggle ${h.sym}`))));
 
   // fees + sell
-  const toField = textField({ label: "Transfer to (sell the whole guy)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital." });
+  const toField = textField({ label: "Transfer to (sell the whole guy)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital.", tip: TIPS.transfer });
   const feesPanel = mk("Fees & sale",
     kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`]]),
     el("div", { class: "btn-row" },
@@ -126,7 +160,7 @@ export async function render(root, { id } = {}) {
   for (const b of show) {
     const holder = el("div", {}, spinner(`Loading ${b.label}…`));
     root.append(holder);
-    loadBrain(b.id).then((full) => holder.replaceWith(manage(full, refresh))).catch((e) => holder.replaceWith(emptyState(`Could not load ${b.label}: ${act.explain(e)}`)));
+    loadBrain(b.id).then(async (full) => holder.replaceWith(await manage(full, refresh))).catch((e) => holder.replaceWith(emptyState(`Could not load ${b.label}: ${act.explain(e)}`)));
   }
 
   // positions

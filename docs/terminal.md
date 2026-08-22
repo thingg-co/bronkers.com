@@ -15,7 +15,7 @@ It is organised around four jobs:
 | Tab | Who it is for | What it does |
 |---|---|---|
 | **The Floor** | anyone, no wallet needed | every brain, live, sortable by return / NAV / trades / age / bell reward; filter to open vaults, interns, yours, or bells worth ringing |
-| **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → mint. Sealed custody by default, entirely in the browser |
+| **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → start. Sealed custody by default, entirely in the browser; the last step publishes the jar on-chain, seeds the wallet, authorises the guard and enrols the brain with the enclave, so it is trading before you leave the page |
 | **My Desk** | owners, depositors, keepers | manage the brains you own, see your vault positions, ring bells that pay |
 | **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, a lever to move the mock market, the runtime command |
 
@@ -46,6 +46,15 @@ step's status and transaction hash. Reverts are translated into sentences:
 "This brain is still an intern…", "This vault is allowlist-only and your
 address is not on it…". The raw log is one click away (console).
 
+**Brains run themselves.** A sealed brain's jar is published on-chain
+(`publishEnvelope`, an event) and the brain is "enrolled" by setting the
+enclave's executor key (`setExecutor`). The farm (`agent: npm run farm`) is one
+process that runs every enrolled brain at its declared cadence and picks the
+book itself. My Desk and the brain page show the runtime status: *enrolled
+with the enclave · last trade · next tick*, *self-hosted* (authored custody),
+or *not running*, plus one-click enrol / unenrol and a publish-jar control for
+brains minted elsewhere.
+
 **Before you sign, you are told what happens.** The deposit modal shows the
 share price, estimated shares and the fee terms; the bell modal shows the
 pending management and performance fees and your 1% cut before you ring (via
@@ -68,6 +77,7 @@ js/terminal/venues.js     venue-aware trade/holding formatting (swap today; pred
                           markets when the Polymarket adapter lands)
 js/terminal/ui.js         DOM helper, formatting, sparkline, modal, toast, fields
 js/terminal/views/        floor.js · brain.js · create.js · desk.js · dev.js
+agent/src/farm.ts         the enclave runtime that runs every enrolled brain
 ```
 
 Everything is plain ES modules loaded straight from the page; `viem` comes from
@@ -83,6 +93,9 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol`):
 - `TraderNFT.christen(tokenId, name)` / `nameOf(tokenId)` — owner-only,
   once, ≤ 32 bytes, permanent. Cosmetic; a record cannot be laundered by
   renaming.
+- `TraderNFT.publishEnvelope(tokenId, bytes)` → `EnvelopePublished` — the
+  sealed jar as an event, so the enclave finds it by scanning logs. Sealed
+  custody only; re-publishable.
 
 Everything else was already public: `policyOf`, `tierOf`, `tiers`, `seasoned`,
 `tradeCountOf`, `firstTradeAt`, `seasonMinTrades`, `seasonDuration`, `tbaNav`,
@@ -116,6 +129,13 @@ python3 dev-server.py              # http://127.0.0.1:8000/app
 The seed prints the dev keys. Paste one in the Developer tab (or open
 `/app?devkey=…`) to act as the owner or the LP. `protocol/script/demo.sh` is
 still the one-shot end-to-end demo; `seed-dev.sh` leaves the chain up.
+
+## Tooltips
+
+Every input carries a short explanation: a ⓘ next to the label (keyboard
+focusable, native `title`) and the same text on the control itself. They are
+written for a person who has never seen the protocol: what the field is, what
+it changes, and what it cannot change.
 
 ## Still to do
 

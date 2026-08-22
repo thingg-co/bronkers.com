@@ -54,6 +54,9 @@ fund_and_authorise_tba() { # tokenId amount
   send --private-key $OWNER_KEY "$tba" "execute(address,uint256,bytes,uint8)" $USDC 0 "$approve" 0
 }
 set_price() { send --private-key $OWNER_KEY $ROUTER "setPrice(address,address,uint256)" $WETH $USDC "$1"; }
+publish() { # tokenId envelopeFile — the sealed jar goes on-chain as an event so the farm can find it
+  send --private-key $OWNER_KEY $NFT "publishEnvelope(uint256,bytes)" "$1" "0x$(xxd -p "agent/$2" | tr -d '\n')"
+}
 
 echo "── brain #1: sealed-generated, seasoned, LP-funded, traded ──"
 G1=$(cd agent && ENCLAVE_PUBLIC_KEY="$ENCLAVE_PUB" npm run --silent genome -- generate \
@@ -62,6 +65,7 @@ C1=$(echo "$G1" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
 mint_brain "$C1" 1 24 2
 send --private-key $OWNER_KEY $GUARD "setExecutor(uint256,address)" 1 $EXECUTOR_ADDR
 send --private-key $OWNER_KEY $NFT "christen(uint256,string)" 1 "Umbra"
+publish 1 genome.dev1.json
 fund_and_authorise_tba 1 1000ether
 tick 1 ./genome.dev1.json --own-book
 VAULT1=$(call $NFT "vaultOf(uint256)(address)" 1)
@@ -83,6 +87,7 @@ C2=$(echo "$G2" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
 mint_brain "$C2" 0 4 1
 send --private-key $OWNER_KEY $GUARD "setExecutor(uint256,address)" 2 $EXECUTOR_ADDR
 send --private-key $OWNER_KEY $NFT "christen(uint256,string)" 2 "Nocturne"
+publish 2 genome.dev2.json
 fund_and_authorise_tba 2 500ether
 tick 2 ./genome.dev2.json --own-book
 VAULT2=$(call $NFT "vaultOf(uint256)(address)" 2)
@@ -111,16 +116,21 @@ cat <<EOF
 
 dev wallet (anvil #0, owner of all three brains): $OWNER_KEY
 LP wallet  (anvil #2, holds Umbra shares):        $LP_KEY
+
+the farm (enclave runtime that runs every enrolled brain; #1 and #2 are enrolled and published):
+  cd agent && set -a && . ./.dev-enclave.env && set +a && \\
+  RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER \\
+  EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY npm run farm -- --mock-brain
 EOF
 
 # keep js/config.js's anvil block in sync with what was just deployed
-python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" <<'PY'
+python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" <<'PY'
 import re, sys, pathlib
-nft, guard, router, usdc, weth, wbtc, epk = sys.argv[1:]
+nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor = sys.argv[1:]
 p = pathlib.Path("js/config.js"); t = p.read_text()
 start = t.index("    31337: {"); end = t.index("    },", start)
 block = t[start:end]
-for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk).items():
+for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor).items():
     block = re.sub(rf'(\s{k}: )"[^"]*"', rf'\g<1>"{v}"', block)
 p.write_text(t[:start] + block + t[end:])
 print("js/config.js anvil block updated")

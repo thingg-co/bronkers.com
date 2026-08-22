@@ -83,6 +83,42 @@ contract ViewsTest is BaseTest {
         nft.christen(id, "Penumbra");
     }
 
+    event EnvelopePublished(uint256 indexed tokenId, bytes envelope);
+
+    function test_PublishEnvelope_SealedOwnerOnly() public {
+        uint256 id = mintTrader(200, 2_000); // fixture custody = 1 (sealed-authored)
+        bytes memory env = bytes('{"v":2,"mode":"sealed","epk":"...","iv":"...","tag":"...","ciphertext":"..."}');
+
+        vm.prank(stranger);
+        vm.expectRevert("Trader: not owner");
+        nft.publishEnvelope(id, env);
+
+        vm.prank(owner);
+        vm.expectRevert("Trader: envelope size");
+        nft.publishEnvelope(id, "");
+
+        vm.prank(owner);
+        vm.expectEmit(true, false, false, true);
+        emit EnvelopePublished(id, env);
+        nft.publishEnvelope(id, env);
+
+        // re-publishing is allowed (re-sealed to a new enclave key); the commitment is untouched
+        bytes32 before = nft.genomeOf(id).commitment;
+        vm.prank(owner);
+        nft.publishEnvelope(id, bytes("second"));
+        assertEq(nft.genomeOf(id).commitment, before);
+    }
+
+    function test_PublishEnvelope_RejectsAuthored() public {
+        address[] memory universe = new address[](1);
+        universe[0] = address(weth);
+        vm.prank(owner);
+        uint256 id = nft.mint(keccak256("authored-fixture"), 1, 4, 0, "claude-sonnet-5", "local:x.json", universe, 200, 2_000);
+        vm.prank(owner);
+        vm.expectRevert("Trader: not sealed");
+        nft.publishEnvelope(id, bytes("nope"));
+    }
+
     function test_NameSurvivesTransfer() public {
         uint256 id = mintTrader(200, 2_000);
         vm.prank(owner);

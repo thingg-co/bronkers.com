@@ -64,7 +64,7 @@ function depositModal(brain, refresh) {
       el("p", { class: "muted" }, "The owner can add you (My Desk → Depositors) or open the vault to anyone.")), actions: [{ label: "Close" }] });
   }
   const maxStr = formatUnits(brain.my.usdc, 18);
-  const field = amountField({ label: "Amount", max: Number(maxStr) > 0 ? maxStr : null, maxLabel: `balance ${fmt.amt(brain.my.usdc)}` });
+  const field = amountField({ label: "Amount", max: Number(maxStr) > 0 ? maxStr : null, maxLabel: `balance ${fmt.amt(brain.my.usdc)}`, tip: "mUSDC to deposit. You receive vault shares at the current share price and can redeem them any time." });
   const est = el("p", { class: "muted est" });
   const update = () => {
     const v = Number(field.value() || 0);
@@ -94,7 +94,7 @@ function depositModal(brain, refresh) {
 }
 
 function withdrawModal(brain, refresh) {
-  const field = amountField({ label: "Amount", max: formatUnits(brain.my.assets, 18), maxLabel: `position ${fmt.amt(brain.my.assets)}` });
+  const field = amountField({ label: "Amount", max: formatUnits(brain.my.assets, 18), maxLabel: `position ${fmt.amt(brain.my.assets)}`, tip: "mUSDC to take out. Paid from the vault's cash; shares are burned at the current share price." });
   const body = el("div", {},
     el("p", {}, "Your position in ", el("strong", {}, brain.label), ": ", el("strong", {}, fmt.usd(brain.my.assets)), ` (${fmt.amt(brain.my.shares, 18, 4)} shares).`),
     field.el,
@@ -164,7 +164,9 @@ function identity(brain) {
       ["Owner", addrChip(brain.owner, { explorer: ex })],
       ["Brain's wallet", addrChip(brain.tba, { explorer: ex }), "ERC-6551 token-bound account. Whoever owns the token controls it."],
       ["Vault", addrChip(brain.vault, { explorer: ex })],
-      executor != null ? ["Executor", executor && executor !== "0x0000000000000000000000000000000000000000" ? [addrChip(executor, { explorer: ex }), " ", badge("operated", "muted")] : badge("not set", "muted"), "Attested execution (TEE) is on the roadmap; until then, “AI-traded” is an operator claim."] : null,
+      brain.runtime ? ["Runs in", brain.runtime.kind === "enclave" ? [badge("the enclave", "good"), " ", el("span", { class: "muted" }, `operated · last trade ${brain.runtime.lastTradeAt ? fmt.when(brain.runtime.lastTradeAt) : "never"}`)] : brain.runtime.kind === "self" ? [badge("self-hosted", "accent"), " ", el("span", { class: "muted" }, "operated by the owner")] : badge("not running", "bad"), "Attested execution (TEE) is on the roadmap; until then, “AI-traded” is an operator claim, and “operated” is the honest label."] : null,
+      executor != null ? ["Executor", executor && executor !== "0x0000000000000000000000000000000000000000" ? addrChip(executor, { explorer: ex }) : badge("not set", "muted"), "The hot key that signs trades. It can only call executeTrade."] : null,
+      brain.genome.custody !== 0 ? ["Sealed jar", brain.envelopePublished ? "published on-chain (ciphertext)" : "not published", "The encrypted genome; only the enclave key opens it."] : null,
       ["Custody", [c.label, " — ", el("span", { class: "muted" }, c.blurb)]],
       ["Genome commitment", el("span", { class: "mono small" }, brain.genome.commitment)],
       ["Model", brain.genome.model],

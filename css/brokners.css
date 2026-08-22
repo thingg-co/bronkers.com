@@ -1068,6 +1068,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent-primary); }
 .dev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 0 var(--space-md); }
 .dev-grid .field { margin: var(--space-xs) 0; }
 .est { min-height: 1.2em; }
+.tip {
+    display: inline-block;
+    font-size: 0.85em;
+    line-height: 1;
+    color: var(--text-tertiary);
+    cursor: help;
+    text-transform: none;
+    letter-spacing: 0;
+    vertical-align: 0.05em;
+}
+.tip:hover, .tip:focus { color: var(--accent-primary); outline: none; }
+.runtime-status { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; font-size: var(--text-sm); }
+.runtime-status .badge { font-size: var(--text-sm); padding: 2px var(--space-sm); }
+input[type="file"].jarfile { font-size: var(--text-sm); }
 
 
 /* 8. Documents (.doc) -------------------------------------------------------- */

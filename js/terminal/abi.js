@@ -11,10 +11,12 @@ export const nftAbi = parseAbi([
   "function accountOf(uint256) view returns (address)",
   "function nameOf(uint256) view returns (string)",
   "function christen(uint256,string)",
+  "function publishEnvelope(uint256,bytes)",
   "function mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
   "function safeTransferFrom(address,address,uint256)",
   "event TraderBorn(uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault)",
   "event Christened(uint256 indexed tokenId, string name)",
+  "event EnvelopePublished(uint256 indexed tokenId, bytes envelope)",
 ]);
 
 export const guardAbi = parseAbi([

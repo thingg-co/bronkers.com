@@ -7,6 +7,7 @@
   "scripts": {
     "genome": "tsx src/tools/make-genome.ts",
     "loop": "tsx src/index.ts",
+    "farm": "tsx src/farm.ts",
     "report": "tsx src/report.ts",
     "typecheck": "tsc --noEmit"
   },

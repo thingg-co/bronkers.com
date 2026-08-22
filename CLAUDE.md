@@ -49,7 +49,7 @@ session needs to know that the code doesn't say.
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 47 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 49 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
@@ -68,7 +68,15 @@ session needs to know that the code doesn't say.
   browser mints authored and sealed; sealed-generated is CLI-only).
 - Read-side views added for the Terminal: `TraderVault.pendingFees()` (what
   the next checkpoint mints + the ringer's cut) and `TraderNFT.christen/nameOf`
-  (owner-only, once, ≤32 bytes). Views.t.sol.
+  (owner-only, once, ≤32 bytes). `TraderNFT.publishEnvelope` emits the sealed
+  jar as `EnvelopePublished` (sealed custody only) so the farm can run a brain
+  with no file handoff. Views.t.sol.
+- **Brains run themselves:** enrolment = `setExecutor(tokenId, enclaveExecutor)`
+  (config.js per chain); `agent: npm run farm` is the one enclave process that
+  runs every enrolled brain (own book while unseasoned, vault once seasoned),
+  verifying each envelope against its commitment. Authored brains stay
+  self-hosted (`npm run loop`). Wizard step 5 = publish + fund + authorise +
+  enrol. Whitepaper §3.1 / §6.2 / §9 describe this; keep them in sync.
 
 ## Related, outside this repo
 - Whitepaper artifact (private share link, same content as
