@@ -972,10 +972,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent-primary); }
 .badge.muted { color: var(--text-tertiary); }
 .pnl-badge.flat { color: var(--text-tertiary); background: var(--bg-tertiary); font-weight: 500; }
 .progress {
+    /* like .hash-chip: the label's padding sets the height, so the text is
+       centred by construction and the fill simply covers the box */
     position: relative;
-    height: 1.25rem;
-    line-height: 1.25rem;      /* the label's line box must equal the bar's height or it clips */
     font-size: var(--text-xs);
+    line-height: 1.5;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
@@ -983,8 +984,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent-primary); }
     margin: var(--space-xs) 0;
     text-align: left;
 }
-.progress-bar { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent-primary); opacity: 0.35; }
-.progress-label { position: relative; display: block; height: 100%; padding: 0 var(--space-xs); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.progress-bar { position: absolute; top: 0; left: 0; bottom: 0; background: var(--accent-primary); opacity: 0.35; }
+.progress-label { position: relative; display: block; padding: 4px var(--space-sm); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* brain page */
 .brain-head { display: flex; align-items: center; gap: var(--space-md); margin: var(--space-sm) 0 var(--space-md); }
