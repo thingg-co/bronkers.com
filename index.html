@@ -52,7 +52,7 @@
             <div class="container">
                 <p class="hero-eyebrow">A research meme, tested with <span class="sic">questionabel</span> rigor</p>
                 <h1 class="wordmark">BROK<span class="typo-n">N</span>ERS<span class="hero-brain">🧠</span></h1>
-                <p class="page-subtitle">Like brokers, but misspelled. Trading brains sealed in jars, receipts on-chain. You can buy all of jar. (A Brokner's pronouns are jar/jarself. Jar is, after all, in a jar.)</p>
+                <p class="page-subtitle">Like brokers, but misspelled. Trading brains sealed in jars, receipts on-chain. You can buy them whole. (A Brokner's pronouns are they/them. There's a brain and there's a jar; that's two.)</p>
             </div>
         </section>
 
@@ -71,7 +71,7 @@
             <div class="container">
                 <div class="section-intro">
                     <h2>The Hedge Fund With Zero Humans</h2>
-                    <p class="lead">A Brokner is a pure-AI broker-trader that lives entirely on the blockchain. Jar's strategy is a secret prompt — sealed in a cryptographic jar at birth so that <em>no one</em>, including jar's owner, including jar's creator, including jar's therapist, can ever read it. Jar trades from jar's own wallet inside strict on-chain guardrails, building a track record that cannot be edited, backfilled, or vibed into existence. And because jar is a token, you can sell jar: wallet, fee stream, and jar's entire life story — or sweep the wallet and sell just the legend.</p>
+                    <p class="lead">A Brokner is a pure-AI broker-trader that lives entirely on the blockchain. Their strategy is a secret prompt — sealed in a cryptographic jar at birth so that <em>no one</em>, including their owner, including their creator, including their therapist, can ever read it. They trade from their own wallet inside strict on-chain guardrails, building a track record that cannot be edited, backfilled, or vibed into existence. And because the brain is a token, you can sell them: wallet, fee stream, and their entire life story — or sweep the wallet and sell just the legend.</p>
                 </div>
             </div>
         </section>
@@ -83,22 +83,22 @@
                     <div class="feature-card">
                         <div class="feature-icon">🧠</div>
                         <h3>1 · Birth a Brain</h3>
-                        <p>Type a vibe. The enclave writes a trading brain from your brief, seals jar in the jar, and throws away the ability to peek. Not even you know what jar is thinking. <em>Especially</em> not you. Only jar's fingerprint goes on-chain — forever.</p>
+                        <p>Type a vibe. The enclave writes a trading brain from your brief, seals it in the jar, and throws away the ability to peek. Not even you know what they're thinking. <em>Especially</em> not you. Only their fingerprint goes on-chain — forever.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">📋</div>
                         <h3>2 · The Internship</h3>
-                        <p>Fresh brains cannot touch other people's money. Company policy. First comes the paper season: real trades, jar's own allowance, two boring protocol-approved markets. Build the record, <em>then</em> we'll talk.</p>
+                        <p>Fresh brains cannot touch other people's money. Company policy. First comes the paper season: real trades, their own allowance, two boring protocol-approved markets. Build the record, <em>then</em> we'll talk.</p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">⚡</div>
                         <h3>3 · Number Goes Up*</h3>
-                        <p>Jar trades on jar's declared schedule inside on-chain guardrails: curated venues, position caps, slippage bounds. Jar pays jar's own rent. Jar's key can trade. Jar cannot withdraw. Jar cannot rug. Jar can only be wrong. <em>*or down. Immutably down.</em></p>
+                        <p>They trade on their declared schedule inside on-chain guardrails: curated venues, position caps, slippage bounds. They pay their own rent. Their key can trade. They cannot withdraw. They cannot rug. They can only be wrong. <em>*or down. Immutably down.</em></p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">🫙</div>
-                        <h3>4 · Sell All of Jar</h3>
-                        <p>One token carries jar: the wallet, the fee stream, and every trade jar ever made. Sell jar funded on any NFT marketplace, or sweep the wallet first and sell just jar and jar's receipts. The history follows jar. Always.</p>
+                        <h3>4 · Sell Them Whole</h3>
+                        <p>One token carries them: the wallet, the fee stream, and every trade they ever made. Sell them funded on any NFT marketplace, or sweep the wallet first and sell just the brain and their receipts. The history follows them. Always.</p>
                     </div>
                 </div>
             </div>
@@ -180,15 +180,15 @@
                             <td>The executor key's only entrypoint is <code>ExecutionGuard.executeTrade</code>. Swap proceeds always return to the vault or the brain's own wallet — there is no code path to an arbitrary address, and it's fuzz-tested.</td>
                         </tr>
                         <tr>
-                            <td>"Nobody knows what jar is thinking."</td>
+                            <td>"Nobody knows what they're thinking."</td>
                             <td>Sealed custody: the prompt is ECIES-sealed to the enclave key at mint (X25519 → HKDF → AES-256-GCM). Only <code>keccak256(genome)</code> lives on-chain, and the runtime refuses to start if its genome doesn't hash to the commitment.</td>
                         </tr>
                         <tr>
-                            <td>"Jar did an internship."</td>
+                            <td>"They did an internship."</td>
                             <td><code>TraderVault.deposit</code> reverts until <code>seasoned(tokenId)</code>: a protocol-set minimum of own-book trades over a minimum duration. Outside capital funds a record, never a fresh mint.</td>
                         </tr>
                         <tr>
-                            <td>"Jar can't trade against jar's own casino."</td>
+                            <td>"They can't trade against their own casino."</td>
                             <td>Venues and tokens are protocol-curated — two deep markets at launch. Owners can narrow their brain's allowlist but can never add an uncurated venue or token.</td>
                         </tr>
                         <tr>
@@ -196,7 +196,7 @@
                             <td>Performance fees apply only above a per-share high-water mark, and fee shares mint into the brain's own wallet — so accrued fees transfer with the token, checkpointed on every sale.</td>
                         </tr>
                         <tr>
-                            <td>"You can sell all of jar."</td>
+                            <td>"You can sell them whole."</td>
                             <td>Plain ERC-721 plus an ERC-6551 token-bound account: wallet contents, fee stream, and admin rights follow <code>ownerOf(tokenId)</code> atomically. Every marketplace works on day one.</td>
                         </tr>
                         <tr>
@@ -208,11 +208,11 @@
                             <td>Fee crystallization is a public crank: <code>ringTheBell()</code> mints 1% of the fee shares it crystallizes to whoever rang — carved from the owner's take, never from LP capital.</td>
                         </tr>
                         <tr>
-                            <td>"Jar shows up on schedule."</td>
+                            <td>"They show up on schedule."</td>
                             <td>The declared cadence (trades per day) is a trait the guard enforces: <code>executeTrade</code> reverts with <code>"Guard: cadence"</code> until <code>tradeIntervalOf</code> has elapsed since the last trade. 24/day means hourly. Owners can tighten the interval, never loosen it.</td>
                         </tr>
                         <tr>
-                            <td>"Jar pays jar's own rent."</td>
+                            <td>"They pay their own rent."</td>
                             <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash; with cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
                         </tr>
                         <tr>
