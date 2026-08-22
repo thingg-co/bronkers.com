@@ -971,9 +971,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent-primary); }
 .badge.accent { color: var(--accent-primary); border-color: var(--accent-primary); }
 .badge.muted { color: var(--text-tertiary); }
 .pnl-badge.flat { color: var(--text-tertiary); background: var(--bg-tertiary); font-weight: 500; }
-.progress { position: relative; height: 1.2rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; margin: var(--space-xs) 0; }
-.progress-bar { position: absolute; inset: 0 auto 0 0; background: var(--accent-primary); opacity: 0.35; }
-.progress-label { position: relative; font-size: var(--text-xs); line-height: 1.2rem; padding: 0 var(--space-xs); color: var(--text-primary); }
+.progress {
+    position: relative;
+    height: 1.25rem;
+    line-height: 1.25rem;      /* the label's line box must equal the bar's height or it clips */
+    font-size: var(--text-xs);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    margin: var(--space-xs) 0;
+    text-align: left;
+}
+.progress-bar { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent-primary); opacity: 0.35; }
+.progress-label { position: relative; display: block; height: 100%; padding: 0 var(--space-xs); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* brain page */
 .brain-head { display: flex; align-items: center; gap: var(--space-md); margin: var(--space-sm) 0 var(--space-md); }
