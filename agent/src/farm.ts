@@ -353,6 +353,7 @@ async function lease(): Promise<void> {
       ledger.recordHostPayment(r.amount);
       notes.delete("extend");
       console.log(`lease: ${Math.round(s.remainingSeconds / 60)} min left; paid ${fmtBase(r.amount)} for ${Math.round(hostExtendSeconds / 3600)}h more (${r.ref})`);
+      lastHostStatus = await host.status().catch(() => s); // /health shows the lease as it is now
     } else {
       noteOnce("extend", `lease: ${Math.round(s.remainingSeconds / 60)} min left and cannot extend: ${r.error}${host.kind === "oyster" ? " — move fees across with `npm run bridge -- --amount <usdc> --to 42161`" : ""}`);
     }
