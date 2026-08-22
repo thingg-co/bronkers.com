@@ -19,6 +19,7 @@ AUTOMATA_DCAP=0xaDdeC7e85c2182202b66E331f2a4A0bBB2cEEa1F
 if [ -z "${DCAP_ATTESTATION:-}" ] && [ "$(cast code --rpc-url "$RPC" $AUTOMATA_DCAP 2>/dev/null | wc -c)" -gt 3 ]; then
   export DCAP_ATTESTATION=$AUTOMATA_DCAP; echo "using Automata DCAP at $AUTOMATA_DCAP for attested registration"
 fi
+export RUNTIME_FEE_DELAY=${RUNTIME_FEE_DELAY:-86400}   # fee raises take a day to bite on a public testnet
 OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast 2>&1)
 echo "$OUT" | grep -E "mWBTC|mUSDC|mWETH|Router|Guard|TraderNFT|RuntimeReg|Market|DcapVerifier|6551 Registry|Account impl"
 addr() { echo "$OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }

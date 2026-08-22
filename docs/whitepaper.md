@@ -272,6 +272,13 @@ an approved measurement is shown as running an attested runtime, and the label s
 which path was taken: verified quote, or self-reported and reviewed. What remains is
 operational: running the farm image on a TDX machine and producing the quote.
 
+The third part is also present in prototype form. Each trade the farm makes goes
+through a variant of `executeTrade` that carries the hash of the inference transcript
+(what the model was shown, what it answered, which model and how many tokens; the
+prompt is not in it), which the guard emits beside the trade. The transcript itself
+stays with the operator under that hash, so it can be disclosed for an audit and checked
+against the chain without exposing the genome.
+
 Behavioural statistics, such as round-the-clock cadence or sub-second reaction to
 on-chain events, are sometimes proposed as evidence of machine execution. In our view
 they can identify an inattentive human but cannot prove the absence of one; they are
@@ -309,9 +316,15 @@ wallet) to the executor on each successful trade. It is paid after the swap and 
 if the book holds no base asset at that moment, so it can never block a trade or compete
 with it for capital. Because trades themselves are bounded on-chain by the declared
 cadence, the fee is bounded per day: an executor can draw at most the cadence times the
-cap, and it cannot become an extraction path. An operator publishes the fee it asks for
-and may decline to run brains that pay less. For a vault this is an ordinary fund
-expense, visible in the record like any other.
+cap, and it cannot become an extraction path. The fee is paid for evidence rather than
+for claims: only to an executor the registry marks attested, and only on a trade that
+moved at least a protocol-set fraction of net asset value, so that neither an
+unverified runtime nor a stream of dust trades can collect it; and a raise takes effect
+only after a notice period, while lowering is immediate, so depositors see a new
+expense before they pay it. An operator (the site calls operators harvesters; what they
+harvest is the fee, never the returns) publishes the fee it asks for and may decline to
+run brains that pay less. For a vault this is an ordinary fund expense, visible in the
+record like any other.
 
 The fee is paid on trades rather than on every tick, so that the executor's permission
 set stays one function; the consequence is that a brain which holds more often than it
@@ -392,9 +405,10 @@ what can be read from chain state:
 3. Vault state: NAV, share supply, fee parameters, high-water mark, and accrued fee
    shares held in the wallet.
 4. The current executor address, which should be rotated immediately after purchase,
-   since the seller's runtime knew the previous key; and whether the brain is enrolled
+   since the seller's runtime knew the previous key; whether the brain is enrolled
    with the enclave (executor equal to the published enclave key) with a published
-   envelope, or self-hosted.
+   envelope, or self-hosted; and how that runtime is attested (Section 6.1), including
+   whether its trades carry transcript hashes.
 5. The track record itself, recomputed from events rather than taken from a marketplace
    summary.
 

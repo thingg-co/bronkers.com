@@ -64,6 +64,13 @@ publish() { # tokenId envelopeFile — the sealed jar goes on-chain as an event 
   send --private-key $OWNER_KEY $NFT "publishEnvelope(uint256,bytes)" "$1" "0x$(xxd -p "agent/$2" | tr -d '\n')"
 }
 
+echo "── runtime registry: register the farm's key and approve its measurement (fees are paid only to attested executors) ──"
+MEASUREMENT=$(cd agent && ENCLAVE_PRIVATE_KEY="$ENCLAVE_PRIV" EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER npm run --silent farm -- --measure)
+ENCLAVE_PUB_HEX=0x$(echo "$ENCLAVE_PUB" | base64 -d | xxd -p | tr -d '\n')
+send --private-key $EXECUTOR_KEY $REG "register(bytes32,bytes)" "$MEASUREMENT" "$ENCLAVE_PUB_HEX"   # self-reported, as the farm does at start
+send --private-key $OWNER_KEY $REG "approveMeasurement(bytes32,bool)" "$MEASUREMENT" true
+echo "   registered + approved $MEASUREMENT"
+
 echo "── brain #1: sealed-generated, seasoned, LP-funded, traded (cadence 24/day: hourly) ──"
 G1=$(cd agent && ENCLAVE_PUBLIC_KEY="$ENCLAVE_PUB" npm run --silent genome -- generate \
   "Trade the two curated markets with discipline; protect capital first." '{"markets":["WETH/USDC","WBTC/USDC"]}' ./genome.dev1.json)
@@ -105,11 +112,6 @@ G3=$(cd agent && npm run --silent genome -- author \
   "You are a volatility hunter. Aggressive, hourly." '{"style":"volatility"}' ./genome.dev3.json)
 C3=$(echo "$G3" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
 mint_brain "$C3" 2 24 0
-
-echo "── runtime registry: approve the farm's self-reported measurement (reviewed, not TEE-attested) ──"
-MEASUREMENT=$(cd agent && ENCLAVE_PRIVATE_KEY="$ENCLAVE_PRIV" EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER npm run --silent farm -- --measure)
-send --private-key $OWNER_KEY $REG "approveMeasurement(bytes32,bool)" "$MEASUREMENT" true
-echo "   approved $MEASUREMENT"
 
 echo "── machine lease: a prepaid job on the mock Oyster market, owned and topped up by the farm's key ──"
 # 0.12 mUSDC per hour, expressed per second with the market's 12 extra decimals; two hours prepaid

@@ -4,7 +4,7 @@ pragma solidity ^0.8.26;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {ITraderNFT, IVenue} from "./interfaces/ITraderNFT.sol";
+import {IRuntimeRegistry, ITraderNFT, IVenue} from "./interfaces/ITraderNFT.sol";
 import {TraderVault} from "./TraderVault.sol";
 
 /// @title ExecutionGuard
@@ -70,16 +70,33 @@ contract ExecutionGuard is ReentrancyGuard {
     mapping(uint256 => uint64) public firstTradeAt;
 
     /// Runtime fee: a flat amount of the base asset paid from the traded book
-    /// to the executor on each successful trade, so an enclave operator can be
-    /// reimbursed for gas and model calls out of the brain's own resources.
-    /// Owner-set per brain, protocol-capped, zero by default, and best-effort:
-    /// if the source has no base left after the swap the fee is skipped rather
-    /// than blocking the trade. Bounded per trade by maxRuntimeFee and per day
-    /// by the declared cadence (trades are rate-limited to it on-chain, see
-    /// tradeIntervalOf), so the most an executor can ever draw is
-    /// cadence * maxRuntimeFee a day: a fund expense, not an extraction path.
+    /// to the executor on each successful trade, so an enclave operator (a
+    /// harvester, on the site) is reimbursed for gas and model calls out of the
+    /// brain's own resources. Owner-set per brain, protocol-capped, zero by
+    /// default, and best-effort: if the source has no base left after the swap
+    /// the fee is skipped rather than blocking the trade. Bounded per trade by
+    /// maxRuntimeFee and per day by the declared cadence (trades are
+    /// rate-limited to it on-chain, see tradeIntervalOf), so the most an
+    /// executor can ever draw is cadence * maxRuntimeFee a day: a fund expense,
+    /// not an extraction path.
+    ///
+    /// Paid for evidence, not claims: when a RuntimeRegistry is set, only an
+    /// executor it marks attested is paid; a trade below minFeeNotionalBps of
+    /// NAV pays no fee (dust cannot be churned for fees); and a fee raise takes
+    /// effect only after runtimeFeeDelay, so depositors see it coming. Lowering
+    /// is immediate.
     uint256 public maxRuntimeFee;
-    mapping(uint256 => uint256) public runtimeFeeOf;
+    address public registry; // IRuntimeRegistry; zero = fees are not gated on attestation
+    uint16 public minFeeNotionalBps = 100; // a trade must move at least 1% of NAV to pay a fee
+    uint64 public runtimeFeeDelay; // notice period for fee raises; zero = immediate
+
+    struct PendingFee {
+        uint256 fee;
+        uint64 effectiveAt;
+    }
+
+    mapping(uint256 => uint256) private _runtimeFee;
+    mapping(uint256 => PendingFee) public pendingRuntimeFeeOf;
 
     event TradeExecuted(
         uint256 indexed tokenId,
@@ -97,8 +114,16 @@ contract ExecutionGuard is ReentrancyGuard {
     event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee);
     event TierConfigured(uint8 tier, uint16 maxNotionalBps, uint256 fee);
     event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee);
+    event RuntimeFeeScheduled(uint256 indexed tokenId, uint256 fee, uint64 effectiveAt);
     event MaxRuntimeFeeSet(uint256 fee);
     event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee);
+    event RegistrySet(address registry);
+    event MinFeeNotionalSet(uint16 bps);
+    event RuntimeFeeDelaySet(uint64 delay);
+    /// The executor's hash of the inference transcript behind a trade (market
+    /// snapshot in, intent out, model and usage). Evidence that can be audited
+    /// later without exposing the genome; optional for self-hosted runtimes.
+    event TranscriptCommitted(uint256 indexed tokenId, bytes32 transcript);
 
     modifier onlyTraderOwner(uint256 tokenId) {
         require(msg.sender == nft.ownerOf(tokenId), "Guard: not trader owner");
@@ -134,12 +159,51 @@ contract ExecutionGuard is ReentrancyGuard {
         emit MaxRuntimeFeeSet(fee);
     }
 
-    /// @notice What this brain pays its executor per trade, in base asset.
-    /// Owner-tunable up to the protocol cap.
+    /// @notice The RuntimeRegistry whose `attested()` gates fee payment; zero disables the gate.
+    function setRegistry(address registry_) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        registry = registry_;
+        emit RegistrySet(registry_);
+    }
+
+    function setMinFeeNotionalBps(uint16 bps) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        require(bps <= 10_000, "Guard: bps");
+        minFeeNotionalBps = bps;
+        emit MinFeeNotionalSet(bps);
+    }
+
+    function setRuntimeFeeDelay(uint64 delay) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        runtimeFeeDelay = delay;
+        emit RuntimeFeeDelaySet(delay);
+    }
+
+    /// @notice What this brain pays its executor per trade, in base asset, as
+    /// of now: a scheduled raise counts once its notice period has passed.
+    function runtimeFeeOf(uint256 tokenId) public view returns (uint256) {
+        PendingFee storage p = pendingRuntimeFeeOf[tokenId];
+        if (p.effectiveAt != 0 && block.timestamp >= p.effectiveAt) return p.fee;
+        return _runtimeFee[tokenId];
+    }
+
+    /// @notice Set the fee. Owner-tunable up to the protocol cap. Lowering
+    /// takes effect at once; raising is scheduled runtimeFeeDelay ahead (if a
+    /// delay is set) and announced, so depositors are not surprised by a new
+    /// expense.
     function setRuntimeFee(uint256 tokenId, uint256 fee) external onlyTraderOwner(tokenId) {
         require(fee <= maxRuntimeFee, "Guard: fee above cap");
-        runtimeFeeOf[tokenId] = fee;
-        emit RuntimeFeeSet(tokenId, fee);
+        uint256 current = runtimeFeeOf(tokenId);
+        if (fee <= current || runtimeFeeDelay == 0) {
+            _runtimeFee[tokenId] = fee;
+            delete pendingRuntimeFeeOf[tokenId];
+            emit RuntimeFeeSet(tokenId, fee);
+        } else {
+            _runtimeFee[tokenId] = current; // settle anything already effective
+            uint64 effectiveAt = uint64(block.timestamp) + runtimeFeeDelay;
+            pendingRuntimeFeeOf[tokenId] = PendingFee(fee, effectiveAt);
+            emit RuntimeFeeScheduled(tokenId, fee, effectiveAt);
+        }
     }
 
     /// @notice Upgrade a brain's seat. Upgrades only, one-time fee per jump,
@@ -228,7 +292,7 @@ contract ExecutionGuard is ReentrancyGuard {
         tokenAllowed[tokenId][token] = allowed;
     }
 
-    // ---- the one executor entrypoint ----
+    // ---- the one executor entrypoint (with or without evidence attached) ----
 
     /// @param fromVault true to trade the LP vault's assets, false to trade the
     /// trader's own book (its token-bound account; the TBA must have approved
@@ -242,6 +306,36 @@ contract ExecutionGuard is ReentrancyGuard {
         uint256 minAmountOut,
         bool fromVault
     ) external nonReentrant returns (uint256 amountOut) {
+        return _executeTrade(tokenId, venue, tokenIn, tokenOut, amountIn, minAmountOut, fromVault, bytes32(0));
+    }
+
+    /// @notice The same trade, with the hash of the inference transcript that
+    /// produced it committed alongside (TranscriptCommitted). An attested
+    /// runtime always uses this form; the transcript itself stays with the
+    /// operator and can be disclosed for audit without exposing the genome.
+    function executeTradeWithTranscript(
+        uint256 tokenId,
+        address venue,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bool fromVault,
+        bytes32 transcript
+    ) external nonReentrant returns (uint256 amountOut) {
+        return _executeTrade(tokenId, venue, tokenIn, tokenOut, amountIn, minAmountOut, fromVault, transcript);
+    }
+
+    function _executeTrade(
+        uint256 tokenId,
+        address venue,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        bool fromVault,
+        bytes32 transcript
+    ) internal returns (uint256 amountOut) {
         Policy storage p = policyOf[tokenId];
         require(msg.sender == p.executor, "Guard: not executor");
         require(venueAllowed[tokenId][venue], "Guard: venue not allowed");
@@ -273,11 +367,17 @@ contract ExecutionGuard is ReentrancyGuard {
         if (firstTradeAt[tokenId] == 0) firstTradeAt[tokenId] = uint64(block.timestamp);
         tradeCountOf[tokenId]++;
         emit TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut, fromVault);
+        if (transcript != bytes32(0)) emit TranscriptCommitted(tokenId, transcript);
 
         // best-effort runtime reimbursement, after the swap so it never
-        // competes with the trade itself for the source's base balance
-        uint256 fee = runtimeFeeOf[tokenId];
-        if (fee > 0 && fee <= maxRuntimeFee && IERC20(baseAsset).balanceOf(source) >= fee) {
+        // competes with the trade itself for the source's base balance; only
+        // to an attested executor, only for a trade that moved real size
+        uint256 fee = runtimeFeeOf(tokenId);
+        if (
+            fee > 0 && fee <= maxRuntimeFee && notional >= (nav * minFeeNotionalBps) / 10_000
+                && (registry == address(0) || IRuntimeRegistry(registry).attested(msg.sender))
+                && IERC20(baseAsset).balanceOf(source) >= fee
+        ) {
             IERC20(baseAsset).safeTransferFrom(source, msg.sender, fee);
             emit RuntimeFeePaid(tokenId, msg.sender, fee);
         }

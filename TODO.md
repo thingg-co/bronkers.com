@@ -71,6 +71,12 @@ it is linked.
 
 - [ ] **The Floor as a leaderboard** fed by `report.ts` (ranking, returns,
       drawdown across the roster).
+- [ ] **Harvester directory.** List registered executors from the
+      RuntimeRegistry: attestation kind, brains run, trades and fees earned
+      (from logs), the ask they publish, so owners can choose one.
+- [ ] **Transcript check.** Paste a disclosed transcript JSON, hash it, and
+      match it against the `TranscriptCommitted` hash on the brain page; define
+      the disclosure procedure (docs/architecture.md §8).
 - [ ] **Prediction-market formatting live** once the adapter lands (fill
       `venues`/`markets` in `js/config.js`).
 

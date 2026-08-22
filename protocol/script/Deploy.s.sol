@@ -52,6 +52,10 @@ contract Deploy is Script {
         );
         guard.setNFT(address(nft), address(usdc));
         guard.setMaxRuntimeFee(5e18); // a brain may pay its executor at most 5 mUSDC per trade
+        guard.setRegistry(address(runtimeRegistry)); // fees only to attested executors
+        // notice period for fee raises; 0 locally so the dev seed's flows stay immediate,
+        // RUNTIME_FEE_DELAY=86400 on public testnets (deploy-testnet.sh sets it)
+        guard.setRuntimeFeeDelay(uint64(vm.envOr("RUNTIME_FEE_DELAY", uint256(0))));
 
         // "a couple of markets": exactly two curated pairs (WETH/USDC,
         // WBTC/USDC) on one curated venue — owners cannot add more

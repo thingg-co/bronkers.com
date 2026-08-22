@@ -250,7 +250,7 @@ export async function loadBrain(id, { force } = {}) {
       return { token: t, sym, vaultBal, tbaBal };
     }),
   );
-  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI, tradeInterval, nextTradeAt, feeLogs, now] = await Promise.all([
+  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI, tradeInterval, nextTradeAt, feeLogs, now, pendingFee, feeDelay, minFeeNotionalBps, feeRegistry, transcriptLogs] = await Promise.all([
     read(b.vault, vaultAbi, "convertToAssets", [feeShares]),
     loadTrades(id, b.genome.birthBlock),
     state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "EnvelopePublished", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
@@ -262,7 +262,15 @@ export async function loadBrain(id, { force } = {}) {
     // the runtime fee is a fund expense; it is in the record like any other
     state.pub.getContractEvents({ address: guard, abi: guardAbi, eventName: "RuntimeFeePaid", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
     chainNow(),
+    read(guard, guardAbi, "pendingRuntimeFeeOf", [BigInt(id)]).catch(() => [0n, 0n]),
+    read(guard, guardAbi, "runtimeFeeDelay").catch(() => 0n),
+    read(guard, guardAbi, "minFeeNotionalBps").catch(() => 0),
+    read(guard, guardAbi, "registry").catch(() => "0x0000000000000000000000000000000000000000"),
+    // the hash of the inference transcript behind each trade, when the runtime committed one
+    state.pub.getContractEvents({ address: guard, abi: guardAbi, eventName: "TranscriptCommitted", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
   ]);
+  const transcriptByTx = new Map(transcriptLogs.map((l) => [l.transactionHash, l.args.transcript]));
+  for (const t of trades) t.transcript = transcriptByTx.get(t.hash) || null;
   const runtime = runtimeStatus(policy[0], Number(policy[4]), b, now, Number(tradeInterval));
   if (state.cfg.registry && runtime.kind !== "none") {
     try {
@@ -306,6 +314,12 @@ export async function loadBrain(id, { force } = {}) {
     tradeInterval: Number(tradeInterval),
     nextTradeAt: Number(nextTradeAt),
     maxDailyRuntimeFee: runtimeFee * BigInt(Math.max(1, Number(b.genome.cadence))),
+    // a scheduled raise (fee, effectiveAt), the notice period, the dust floor, and whether fees are gated on attestation
+    pendingRuntimeFee: { fee: pendingFee[0], effectiveAt: Number(pendingFee[1]) },
+    runtimeFeeDelay: Number(feeDelay),
+    minFeeNotionalBps: Number(minFeeNotionalBps),
+    feesGated: String(feeRegistry).toLowerCase() !== "0x0000000000000000000000000000000000000000",
+    transcripts: transcriptLogs.length,
     runtimeFeesPaid: feeLogs.reduce((s, l) => s + (l.args.fee ?? 0n), 0n),
     runtimeFeePayments: feeLogs.length,
     token,

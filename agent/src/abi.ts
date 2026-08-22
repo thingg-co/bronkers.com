@@ -14,6 +14,7 @@ export const traderNftAbi = parseAbi([
 
 export const guardAbi = parseAbi([
   "function executeTrade(uint256 tokenId, address venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, bool fromVault) returns (uint256)",
+  "function executeTradeWithTranscript(uint256 tokenId, address venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, bool fromVault, bytes32 transcript) returns (uint256)",
   "function policyOf(uint256 tokenId) view returns (address executor, uint16 maxNotionalBps, uint16 maxSlippageBps, uint64 minTradeInterval, uint64 lastTradeAt, address valuationRouter)",
   "function tokenAllowed(uint256 tokenId, address token) view returns (bool)",
   "function venueAllowed(uint256 tokenId, address venue) view returns (bool)",
@@ -22,6 +23,10 @@ export const guardAbi = parseAbi([
   "function tradeCountOf(uint256 tokenId) view returns (uint32)",
   "function runtimeFeeOf(uint256 tokenId) view returns (uint256)",
   "function maxRuntimeFee() view returns (uint256)",
+  "function pendingRuntimeFeeOf(uint256 tokenId) view returns (uint256 fee, uint64 effectiveAt)",
+  "function runtimeFeeDelay() view returns (uint64)",
+  "function minFeeNotionalBps() view returns (uint16)",
+  "function registry() view returns (address)",
   "function baseAsset() view returns (address)",
   "function cadenceIntervalOf(uint256 tokenId) view returns (uint64)",
   "function tradeIntervalOf(uint256 tokenId) view returns (uint64)",
@@ -29,6 +34,8 @@ export const guardAbi = parseAbi([
   "event TradeExecuted(uint256 indexed tokenId, address indexed venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, bool fromVault)",
   "event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee)",
   "event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee)",
+  "event RuntimeFeeScheduled(uint256 indexed tokenId, uint256 fee, uint64 effectiveAt)",
+  "event TranscriptCommitted(uint256 indexed tokenId, bytes32 transcript)",
 ]);
 
 export const vaultAbi = parseAbi([

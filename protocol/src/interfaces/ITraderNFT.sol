@@ -10,6 +10,13 @@ interface ITraderNFT {
     function cadenceOf(uint256 tokenId) external view returns (uint8);
 }
 
+/// @notice What the guard asks the RuntimeRegistry: is this executor key
+/// registered to an approved runtime measurement? Runtime fees are paid only
+/// to executors that are.
+interface IRuntimeRegistry {
+    function attested(address executor) external view returns (bool);
+}
+
 /// @notice Verifies a TEE quote and returns what the RuntimeRegistry binds:
 /// a runtime measurement and the first 32 bytes of the quote's report data.
 /// Must revert on an invalid quote. Implementations wrap a chain's DCAP

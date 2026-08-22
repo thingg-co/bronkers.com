@@ -113,6 +113,16 @@ picked up there.
    priced, a fee-0 brain paused past its credit with the covering fee printed,
    resumed on a fee raise). `/health` and `/ledger` expose the books; the
    Terminal shows them in My Desk and the Developer tab.
+   **Harvesters.** Anyone can run a farm; an owner chooses one by setting its
+   key as executor, and the site calls whoever runs a farm a harvester. The
+   guard pays the runtime fee only for evidence: only to an executor the
+   RuntimeRegistry marks attested, only on trades of at least
+   `minFeeNotionalBps` of NAV (dust cannot be churned for fees), with raises
+   taking effect after `runtimeFeeDelay` (a day on public testnets) and every
+   trade carrying the keccak256 of its inference transcript
+   (`executeTradeWithTranscript`); the farm keeps the transcripts under their
+   hashes (`FARM_TRANSCRIPTS_DIR`) for audit. A farm whose measurement is not
+   approved runs its brains but is not paid, and says so at start.
 2. **Inference backend.** `GatewayBrain` next to `ClaudeBrain`: OpenAI-compatible
    chat completions with a forced tool call, `INFERENCE_BASE_URL` /
    `INFERENCE_API_KEY`, usage priced by `INFERENCE_PRICE_IN/OUT`. Selected

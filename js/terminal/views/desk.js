@@ -16,7 +16,7 @@ const TIPS = {
   interval: "Minimum seconds between trades, enforced on-chain. 0 = no limit beyond the declared cadence.",
   transfer: "Sends the token. Everything in the brain's wallet goes with it; sweep first to keep the capital.",
   jar: "The sealed envelope (.sealed.json) this brain was minted with. Publishing puts the ciphertext on-chain so an enclave can run the brain.",
-  fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol, paid at most once per declared-cadence interval (trades are rate-limited on-chain), skipped when the book has no cash.",
+  fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol, paid at most once per declared-cadence interval (trades are rate-limited on-chain), skipped when the book has no cash, paid only to an attested executor and only on trades above the dust floor. Raises take effect after the notice period; lowering is immediate.",
   account: "The enclave keeps an account per brain: the runtime fees it has received against what the brain's ticks cost it (model tokens, gas). Fees only arrive on trades, so a brain that holds more than it trades runs on credit; past the operator's grace it is paused until the owner raises the fee.",
 };
 import { custodyBadge, jar, statusBadge } from "./floor.js";
@@ -89,10 +89,12 @@ async function manage(brain, refresh) {
       brain.nextTradeAt && brain.nextTradeAt > now ? ["Next trade allowed", `in about ${fmt.duration(brain.nextTradeAt - now)}`] : null,
       ["Jar", sealed ? (brain.envelopePublished ? badge("published on-chain", "good") : badge("not published", "bad")) : "with you (authored custody — you run it)"],
       rt.measurement && rt.registered ? ["Runtime measurement", [el("span", { class: "mono small" }, `${rt.measurement.slice(0, 14)}…`), " ", el("span", { class: "muted small" }, rt.attested ? "approved by the protocol (self-reported, not hardware-attested)" : "self-reported, not yet approved")]] : null,
-      ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)}) · at most ${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC a day`, TIPS.fee],
+      ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)}) · at most ${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC a day${brain.feesGated ? " · paid only while the executor is attested" : ""}${brain.minFeeNotionalBps ? ` · no fee on trades under ${fmt.bps(brain.minFeeNotionalBps)} of NAV` : ""}`, TIPS.fee],
+      brain.pendingRuntimeFee && brain.pendingRuntimeFee.effectiveAt && brain.pendingRuntimeFee.effectiveAt > now ? ["Fee raise scheduled", `${fmt.amt(brain.pendingRuntimeFee.fee, 18, 4)} mUSDC per trade, in effect in about ${fmt.duration(brain.pendingRuntimeFee.effectiveAt - now)}`] : null,
       brain.runtimeFeePayments ? ["Runtime fees paid", `${fmt.amt(brain.runtimeFeesPaid || 0n, 18, 4)} mUSDC over ${brain.runtimeFeePayments} trade${brain.runtimeFeePayments === 1 ? "" : "s"}`, "From the traded book to the executor, on-chain (RuntimeFeePaid events)."] : null,
     ]),
     el("div", { class: "inline-form" }, feeField.el, el("button", { class: "btn", onclick: async () => { try { await run("Runtime fee", act.setRuntimeFee(brain.id, feeField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Set fee")),
+    brain.runtimeFeeDelay ? el("p", { class: "muted small" }, `A raise takes effect ${fmt.duration(brain.runtimeFeeDelay)} after you set it (depositors are told); lowering is immediate.`) : null,
     econ,
     sealed && !brain.envelopePublished ? el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Publish the sealed jar ", tip(TIPS.jar))), jarInput), el("button", { class: "btn", onclick: async () => {
       const f = jarInput.files && jarInput.files[0]; if (!f) return toast("Choose the .sealed.json file first.", "err");

@@ -8,6 +8,8 @@ agent/.env
 agent/genome.local.json
 agent/.farm-ledger.json
 agent/.farm-ledger.json.tmp
+agent/.farm-transcripts/
+agent/.transcripts/
 
 # Foundry build artifacts
 protocol/out/

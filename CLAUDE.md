@@ -60,7 +60,7 @@ session needs to know that the code doesn't say.
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 60 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 64 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
@@ -107,6 +107,14 @@ session needs to know that the code doesn't say.
   parses the TD report out of the serialized Output (measurement =
   keccak256(mrTd ‖ rtMr0..3), report data must equal keccak256(executor ‖
   enclave key) — the farm prints that hash at start); mocks for tests.
+  **Paid for evidence** (Aug 2026): with `ExecutionGuard.registry` set, the
+  fee goes only to an executor the registry marks `attested`; no fee on trades
+  under `minFeeNotionalBps` (1%) of NAV; raises are scheduled `runtimeFeeDelay`
+  ahead (`pendingRuntimeFeeOf`; 0 locally, 86400 on testnet), lowering is
+  immediate; `executeTradeWithTranscript(…, bytes32)` emits
+  `TranscriptCommitted` with the keccak256 of the inference transcript
+  (agent/src/transcript.ts; kept under its hash in FARM_TRANSCRIPTS_DIR). The
+  site calls operators **harvesters**; they harvest the fee, never the returns.
   `TraderNFT.tokenURI` on-chain JSON + jar SVG. The farm self-registers
   (`agent/src/measure.ts`; FARM_QUOTE_PATH for the hardware path), serves
   `/compose`, `/health`, `/ledger` on FARM_HTTP_PORT, honours FARM_MIN_FEE.

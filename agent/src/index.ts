@@ -1,9 +1,10 @@
 import { formatUnits } from "viem";
 import { traderNftAbi } from "./abi.js";
 import { createBrain, describeBackend, type Brain } from "./brain.js";
-import { config, publicClient, snapshot, type Book } from "./chain.js";
+import { chainId, config, publicClient, snapshot, type Book } from "./chain.js";
 import { commit, openSecretStore, type Genome } from "./genome.js";
 import { execute, prepare } from "./executor.js";
+import { buildTranscript, saveTranscript } from "./transcript.js";
 
 /**
  * The trader's life: decrypt genome -> prove it matches the on-chain
@@ -47,7 +48,8 @@ async function loadVerifiedGenome(): Promise<{ genome: Genome; model: string; ca
 
 async function tick(brain: Brain): Promise<void> {
   const snap = await snapshot(book);
-  const { intent, usage } = await brain.decide(snap);
+  const decision = await brain.decide(snap);
+  const { intent, usage } = decision;
   console.log(`intent: ${intent.action} — ${intent.rationale}${usage ? ` · ${usage.inputTokens}+${usage.outputTokens} tokens (${usage.model})` : ""}`);
   const trade = await prepare(intent, snap);
   if (!trade) return;
@@ -58,8 +60,10 @@ async function tick(brain: Brain): Promise<void> {
     console.log("dry-run: not submitting");
     return;
   }
-  const receipt = await execute(trade);
-  console.log(`executed within guardrails: ${receipt.transactionHash} (gas ${formatUnits(receipt.gasUsed * receipt.effectiveGasPrice, 18)})`);
+  const { hash: transcript, json } = buildTranscript(chainId, snap, decision);
+  const receipt = await execute(trade, config.tokenId, transcript);
+  saveTranscript(process.env.TRANSCRIPTS_DIR === "" ? null : (process.env.TRANSCRIPTS_DIR ?? "./.transcripts"), transcript, json);
+  console.log(`executed within guardrails: ${receipt.transactionHash} · transcript ${transcript.slice(0, 12)}… (gas ${formatUnits(receipt.gasUsed * receipt.effectiveGasPrice, 18)})`);
 }
 
 const { genome, model, cadence } = await loadVerifiedGenome();

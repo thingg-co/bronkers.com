@@ -11,6 +11,7 @@ import { execute, prepare } from "./executor.js";
 import { commit, type Genome } from "./genome.js";
 import { hostFromEnv, type HostStatus } from "./host.js";
 import { measureRuntime } from "./measure.js";
+import { buildTranscript, saveTranscript } from "./transcript.js";
 
 /**
  * The farm: one enclave process that runs every brain enrolled with it, and
@@ -41,6 +42,12 @@ import { measureRuntime } from "./measure.js";
  * and in the ledger. GET /ledger shows all of it per brain; GET /health the
  * totals.
  *
+ * Evidence: each trade goes through executeTradeWithTranscript with the
+ * keccak256 of the inference transcript (snapshot in, intent out, model,
+ * usage); the transcript is kept under its hash in FARM_TRANSCRIPTS_DIR for
+ * audit. The guard pays the runtime fee only to an attested executor, so the
+ * farm says at start whether it is one.
+ *
  * Enclave endpoint (optional, FARM_HTTP_PORT): GET /health, GET /ledger
  * [?tokenId=], POST /compose {brief, tweaks} -> {commitment, envelope} for
  * sealed-generated brains. The prompt is composed and sealed in-process and
@@ -54,6 +61,7 @@ import { measureRuntime } from "./measure.js";
  *      + FARM_HOST_* / OYSTER_* (host.ts), FARM_HOST_MIN_SECONDS (default 6h),
  *      FARM_HOST_EXTEND_SECONDS (default 24h), FARM_HOST_CHECK_SECONDS (default 300),
  *      FARM_HTTP_PORT, REGISTRY_ADDRESS, FARM_QUOTE_PATH, FARM_QUOTE_FEE (native),
+ *      FARM_TRANSCRIPTS_DIR (default ./.farm-transcripts; empty to keep none),
  *      INFERENCE_BASE_URL/INFERENCE_API_KEY (TEE gateway instead of Anthropic),
  *      FARM_TURBO=1 (dev: tick every poll; trades still wait for the on-chain cadence).
  */
@@ -105,6 +113,7 @@ const host = hostFromEnv(process.env, { rpcUrl: config.rpcUrl, chainId, payerKey
 const hostMinSeconds = Number(process.env.FARM_HOST_MIN_SECONDS ?? 6 * 3600);
 const hostExtendSeconds = Number(process.env.FARM_HOST_EXTEND_SECONDS ?? 24 * 3600);
 const hostCheckMs = Number(process.env.FARM_HOST_CHECK_SECONDS ?? 300) * 1000;
+const transcriptsDir = process.env.FARM_TRANSCRIPTS_DIR === "" ? null : (process.env.FARM_TRANSCRIPTS_DIR ?? "./.farm-transcripts");
 let lastHostCheck = 0;
 let lastHostStatus: HostStatus | null = null;
 
@@ -180,6 +189,27 @@ async function registerRuntime(): Promise<void> {
     console.log(`registry: registered measurement + enclave key under ${me} (${hash}); self-reported, not hardware-attested`);
   } catch (e) {
     console.error(`registry: could not register: ${e instanceof Error ? e.message : e}`);
+  }
+}
+
+/** Fees are paid only to attested executors (when the guard has a registry): say where we stand. */
+async function reportAttestation(): Promise<void> {
+  try {
+    const gated = await publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "registry" });
+    if (gated === "0x0000000000000000000000000000000000000000") {
+      console.log("fees: the guard has no registry set; runtime fees are not gated on attestation here");
+      return;
+    }
+    if (!config.registry) {
+      console.log("fees: the guard gates runtime fees on attestation but REGISTRY_ADDRESS is unset; this farm will not be paid");
+      return;
+    }
+    const ok = await publicClient.readContract({ address: config.registry, abi: registryAbi, functionName: "attested", args: [me] });
+    console.log(ok
+      ? "fees: this executor is attested (approved measurement); runtime fees will be paid"
+      : `fees: this executor is NOT attested (measurement ${measurement.slice(0, 10)}… not approved); brains will trade but no runtime fee will be paid until the protocol approves the measurement`);
+  } catch (e) {
+    console.error(`fees: could not read attestation status: ${e instanceof Error ? e.message : e}`);
   }
 }
 
@@ -317,7 +347,8 @@ async function tick(r: Running): Promise<void> {
   const book = await chooseBook(r.tokenId);
   if (!book) return;
   const snap = await snapshot(book, r.tokenId);
-  const { intent, usage } = await r.brain.decide(snap);
+  const decision = await r.brain.decide(snap);
+  const { intent, usage } = decision;
   ledger.recordTick(r.tokenId, usage);
   console.log(`${r.label} [${book}]: ${intent.action} — ${intent.rationale}${usage ? ` · ${usage.inputTokens}+${usage.outputTokens} tokens` : ""}`);
   const trade = await prepare(intent, snap);
@@ -327,12 +358,14 @@ async function tick(r: Running): Promise<void> {
   }
   console.log(`${r.label}: swap ${formatUnits(trade.amountIn, 18)} ${trade.tokenIn} -> ${trade.tokenOut} (minOut ${formatUnits(trade.minAmountOut, 18)})`);
   if (dryRun) return;
-  const receipt = await execute(trade, r.tokenId);
+  const { hash: transcript, json } = buildTranscript(chainId, snap, decision);
+  const receipt = await execute(trade, r.tokenId, transcript);
+  saveTranscript(transcriptsDir, transcript, json);
   ledger.recordTrade(r.tokenId, receipt.gasUsed, receipt.effectiveGasPrice);
   r.lastTradeAt = r.lastTickAt;
   await refreshFees(r.tokenId, r.birthBlock).catch(() => {});
   const account = ledger.account(r.tokenId);
-  console.log(`${r.label}: executed within guardrails ${receipt.transactionHash} · gas ${formatUnits(receipt.gasUsed * receipt.effectiveGasPrice, 18)} · paid to date ${fmtBase(account.feesPaid)} · cost to date ${fmtBase(ledger.costOf(account))}`);
+  console.log(`${r.label}: executed within guardrails ${receipt.transactionHash} · transcript ${transcript.slice(0, 12)}… · gas ${formatUnits(receipt.gasUsed * receipt.effectiveGasPrice, 18)} · paid to date ${fmtBase(account.feesPaid)} · cost to date ${fmtBase(ledger.costOf(account))}`);
   ledger.save();
 }
 
@@ -476,6 +509,7 @@ function startHttp(): void {
 }
 
 await registerRuntime();
+await reportAttestation();
 startHttp();
 do {
   try {

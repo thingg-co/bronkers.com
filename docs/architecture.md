@@ -135,7 +135,10 @@ any outside deposit clears.
 4. `minAmountOut >= quote × (10_000 − maxSlippageBps) / 10_000`
 5. pull `amountIn` from the vault (or TBA), swap at `venue`, require
    `received >= minAmountOut`, **return all proceeds to the source of funds**
-6. emit `TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut)`
+6. emit `TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut)`, and
+   `TranscriptCommitted(tokenId, hash)` when the executor used
+   `executeTradeWithTranscript` (same checks, same policy; the extra argument is the
+   keccak256 of the inference transcript behind the trade)
 7. pay the runtime fee (below), if any, and emit `RuntimeFeePaid`
 
 There is no code path that sends assets to an arbitrary address. This invariant is
@@ -144,12 +147,18 @@ fuzz-tested (`Guardrails.t.sol`).
 `setPolicy(...)` / `setExecutor(...)` — only `traderNFT.ownerOf(tokenId)`, read live,
 so administrative control follows the token automatically on transfer.
 
-**Runtime fee.** `runtimeFeeOf[tokenId]` (owner-set via `setRuntimeFee`, ≤ the
+**Runtime fee.** `runtimeFeeOf(tokenId)` (owner-set via `setRuntimeFee`, ≤ the
 deployer's `maxRuntimeFee`) is paid in the base asset from the traded source to the
-executor after each successful `executeTrade`, and skipped if the source has no base
-left. Capped per trade, post-trade, and bounded per day because trades are bounded
-by the enforced cadence: the most an executor can ever draw is cadence × cap a day.
-The no-extraction invariant holds (Runtime.t.sol).
+executor after each successful trade, and skipped if the source has no base left.
+Capped per trade, post-trade, and bounded per day because trades are bounded by the
+enforced cadence: the most an executor can ever draw is cadence × cap a day. Paid for
+evidence rather than claims: when the deployer has set a `registry`, only an executor
+the `RuntimeRegistry` marks `attested` is paid; a trade below `minFeeNotionalBps` of
+NAV (default 1%) pays no fee, so dust cannot be churned for fees; and a raise is
+scheduled `runtimeFeeDelay` ahead (`pendingRuntimeFeeOf`, `RuntimeFeeScheduled`; zero
+locally, a day on public testnets) while lowering is immediate, so depositors see a
+new expense coming. The site calls operators *harvesters*; what they harvest is the
+fee. The no-extraction invariant holds (Runtime.t.sol).
 
 ### 2.2b RuntimeRegistry.sol + AutomataDcapTdxVerifier.sol
 
@@ -290,7 +299,12 @@ One enclave process for every enrolled brain. Enrolment is `setExecutor(tokenId,
 farmKey)`; the farm polls the chain, and for each token whose executor is its key it
 takes the latest `EnvelopePublished` envelope, unseals it with `ENCLAVE_PRIVATE_KEY`,
 verifies `commit(genome) == commitment`, and runs the brain at its declared cadence,
-keeping time by the chain's clock (the guard enforces the cadence on-chain). Book
+keeping time by the chain's clock (the guard enforces the cadence on-chain). Every trade
+goes through `executeTradeWithTranscript` with the keccak256 of the inference transcript
+(`agent/src/transcript.ts`: what the model was shown, the intent, model and usage; the
+prompt is not in it), and the transcript is kept under its hash in `FARM_TRANSCRIPTS_DIR`
+so a disclosure can be checked against the chain. At start the farm says whether its key
+is attested, because the guard pays fees only to attested executors. Book
 selection: own wallet while unseasoned, vault once seasoned and funded, idle if neither
 holds funds or the wallet has not approved the guard. No protocol state of its own: it
 resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via `npm
@@ -375,7 +389,9 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | MEV / front-running | tight `minAmountOut` | private order flow |
 | Wash-traded track record | protocol-curated venues/tokens (owner cannot add own pools) + paper season before outside deposits | + leaderboard footnoting, volume-quality weighting |
 | Instant-flip of fresh mints | paper season: min own-book trades + duration before vault opens | same, longer parameters |
-| Executor churns trades to farm the runtime fee | fee capped per trade and trades rate-limited on-chain to the declared cadence: at most cadence × cap a day | same |
+| Executor churns trades to farm the runtime fee | fee capped per trade, trades rate-limited on-chain to the declared cadence (at most cadence × cap a day), and no fee on trades under `minFeeNotionalBps` of NAV | same |
+| Operator paid for work it did not do (wrong model, no model) | fee paid only to an executor the registry marks attested; each trade carries the transcript hash for audit | hardware-attested registration through the DCAP adapter; transcripts disclosed on request |
+| Fee raised on depositors without notice | raises take effect after `runtimeFeeDelay`; lowering is immediate | same, with a longer period |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
 | NFT deposited into own TBA (ownership cycle) | blocked: TBA cannot receive its own collection | same |
 | Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
@@ -397,3 +413,6 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 - Whether the runtime fee should ever be payable on a hold tick (it would be a second
   executor entry point); today the operator's credit policy absorbs holds and the owner
   prices them into the per-trade fee.
+- Transcript disclosure: the hash is on-chain and the transcript with the operator; the
+  procedure by which an auditor asks for one, and what the Terminal should do to verify
+  a disclosed transcript against its hash, is still to be written (TODO.md).

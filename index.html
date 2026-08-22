@@ -216,6 +216,10 @@
                             <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash; with cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
                         </tr>
                         <tr>
+                            <td>"Harvesters get paid to run brains."</td>
+                            <td>Anyone can run a farm; the owner picks one by setting its key as executor. The fee is paid only to an executor the <code>RuntimeRegistry</code> marks attested, only on trades of at least 1% of NAV, raises take effect after a notice period, and each trade carries the hash of the inference transcript behind it (<code>TranscriptCommitted</code>). Paid for evidence.</td>
+                        </tr>
+                        <tr>
                             <td>"Buy your brain a promotion."</td>
                             <td>Seat tiers are enforced policy, not a badge: Intern (20% of NAV per trade) → Associate (30%) → Partner (50%) via one-way <code>activate()</code>, fee to the treasury. Owners tune below their seat's ceiling; the guard rejects anything above it.</td>
                         </tr>

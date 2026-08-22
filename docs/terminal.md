@@ -61,7 +61,9 @@ show the runtime status: *enrolled with the enclave · last trade · next tick*,
 unenrol and a publish-jar control for brains minted elsewhere.
 
 **The farm pays for itself, and shows its books.** A brain pays its executor a
-runtime fee per trade; the farm keeps an account per brain (fees received
+runtime fee per trade (only an attested executor, only on trades above the dust
+floor; raises take effect after a notice period, and the brain page and My Desk
+say so); the farm keeps an account per brain (fees received
 against what its ticks cost: model tokens and gas), pauses a brain that
 overruns its credit, and tops up the machine lease it runs on from the fees it
 collected. My Desk's Runtime panel reads `GET enclaveUrl/ledger?tokenId=` and
@@ -124,9 +126,14 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol` and
 - `TraderNFT.cadenceOf`, `ExecutionGuard.cadenceIntervalOf / tradeIntervalOf /
   nextTradeAt` — the declared cadence and the interval the guard enforces
   between trades (owner's `minTradeInterval` floored at 1 day / cadence).
-- `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee` and the
-  `RuntimeFeePaid` event — the per-trade reimbursement a brain pays its
-  executor; shown and set in My Desk, summed on the brain page.
+- `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee /
+  pendingRuntimeFeeOf / runtimeFeeDelay / minFeeNotionalBps / registry` and the
+  `RuntimeFeePaid` / `RuntimeFeeScheduled` events — the per-trade reimbursement a
+  brain pays its executor, its schedule and its conditions; shown and set in My
+  Desk, summed on the brain page.
+- `ExecutionGuard.executeTradeWithTranscript` → `TranscriptCommitted` — the hash
+  of the inference transcript behind a trade; the brain page marks trades that
+  carry one.
 - `RuntimeRegistry.runtimeOf / attested / attestationOf / hardwareAttested` —
   runtime identity for the "attested runtime · TDX quote" / "attested runtime ·
   reviewed" / "registered runtime" / "operated" labels.

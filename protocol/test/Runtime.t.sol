@@ -122,15 +122,134 @@ contract RuntimeTest is BaseTest {
         uint256 executed;
         for (uint256 h = 0; h < 24; h++) {
             vm.warp(t0 + h * 1 hours);
-            uint256 quoted = router.quote(address(usdc), address(weth), 10e18);
+            uint256 quoted = router.quote(address(usdc), address(weth), 200e18); // 2% of NAV: above the dust floor
             vm.prank(executor);
-            try guard.executeTrade(id, address(router), address(usdc), address(weth), 10e18, quoted, true) {
+            try guard.executeTrade(id, address(router), address(usdc), address(weth), 200e18, quoted, true) {
                 executed++;
             } catch {}
         }
         assertEq(executed, 4);
         assertEq(usdc.balanceOf(executor), 4 * 5e18);
         assertLe(usdc.balanceOf(executor), uint256(nft.cadenceOf(id)) * guard.maxRuntimeFee());
+    }
+
+    /// Paid for evidence: with a registry set, only an attested executor is paid.
+    function test_RuntimeFee_OnlyToAttestedExecutorWhenRegistrySet() public {
+        uint256 id = mintTrader(200, 2_000);
+        guard.setMaxRuntimeFee(5e18);
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 2e18);
+        lpDeposit(id, 10_000e18);
+        RuntimeRegistry reg = new RuntimeRegistry();
+        vm.prank(stranger);
+        vm.expectRevert("Guard: not deployer");
+        guard.setRegistry(address(reg));
+        guard.setRegistry(address(reg));
+
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 0, "unregistered executor is not paid");
+
+        bytes32 m = keccak256("farm-image");
+        vm.prank(executor);
+        reg.register(m, hex"0102");
+        vm.warp(vm.getBlockTimestamp() + 6 hours);
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 0, "registered but unapproved is not paid");
+
+        reg.approveMeasurement(m, true);
+        vm.warp(vm.getBlockTimestamp() + 6 hours);
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 2e18, "attested executor is paid");
+
+        guard.setRegistry(address(0)); // gate off: anyone enrolled is paid again
+        vm.warp(vm.getBlockTimestamp() + 6 hours);
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 4e18);
+    }
+
+    /// Dust cannot be churned for fees: a trade below minFeeNotionalBps of NAV pays nothing.
+    function test_RuntimeFee_NoFeeOnDustTrades() public {
+        uint256 id = mintTrader(200, 2_000);
+        guard.setMaxRuntimeFee(5e18);
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 2e18);
+        lpDeposit(id, 10_000e18);
+        assertEq(guard.minFeeNotionalBps(), 100);
+        execTrade(id, address(usdc), address(weth), 50e18); // 0.5% of NAV
+        assertEq(usdc.balanceOf(executor), 0);
+        vm.warp(vm.getBlockTimestamp() + 6 hours);
+        execTrade(id, address(usdc), address(weth), 200e18); // 2%
+        assertEq(usdc.balanceOf(executor), 2e18);
+        vm.prank(stranger);
+        vm.expectRevert("Guard: not deployer");
+        guard.setMinFeeNotionalBps(500);
+        guard.setMinFeeNotionalBps(500); // 5%
+        vm.warp(vm.getBlockTimestamp() + 6 hours);
+        execTrade(id, address(usdc), address(weth), 200e18); // 2% < 5%
+        assertEq(usdc.balanceOf(executor), 2e18, "below the raised floor: no fee");
+    }
+
+    /// Raises are announced: they take effect after runtimeFeeDelay; lowering is immediate.
+    function test_RuntimeFee_RaiseTakesEffectAfterDelay_LowerAtOnce() public {
+        uint256 id = mintTrader(200, 2_000);
+        guard.setMaxRuntimeFee(5e18);
+        lpDeposit(id, 10_000e18);
+        vm.prank(stranger);
+        vm.expectRevert("Guard: not deployer");
+        guard.setRuntimeFeeDelay(1 days);
+        guard.setRuntimeFeeDelay(1 days);
+        uint256 t0 = vm.getBlockTimestamp();
+
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 1e18); // a raise from 0: scheduled
+        assertEq(guard.runtimeFeeOf(id), 0);
+        (uint256 pf, uint64 at) = guard.pendingRuntimeFeeOf(id);
+        assertEq(pf, 1e18);
+        assertEq(at, t0 + 1 days);
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 0, "not yet in effect");
+
+        vm.warp(t0 + 1 days);
+        assertEq(guard.runtimeFeeOf(id), 1e18);
+        execTrade(id, address(usdc), address(weth), 500e18);
+        assertEq(usdc.balanceOf(executor), 1e18, "in effect after the notice period");
+
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 0.5e18); // lowering: immediate, clears any schedule
+        assertEq(guard.runtimeFeeOf(id), 0.5e18);
+        (pf, at) = guard.pendingRuntimeFeeOf(id);
+        assertEq(at, 0);
+
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 3e18); // raise again: scheduled from now
+        assertEq(guard.runtimeFeeOf(id), 0.5e18);
+        (pf, at) = guard.pendingRuntimeFeeOf(id);
+        assertEq(pf, 3e18);
+        assertEq(at, t0 + 2 days);
+
+        guard.setRuntimeFeeDelay(0); // no delay: raises are immediate again
+        vm.prank(owner);
+        guard.setRuntimeFee(id, 4e18);
+        assertEq(guard.runtimeFeeOf(id), 4e18);
+    }
+
+    event TranscriptCommitted(uint256 indexed tokenId, bytes32 transcript);
+
+    /// A trade can carry the hash of the inference transcript that produced it.
+    function test_TranscriptCommittedWithTrade() public {
+        uint256 id = mintTrader(200, 2_000);
+        lpDeposit(id, 10_000e18);
+        bytes32 h = keccak256("snapshot+intent+model");
+        uint256 quoted = router.quote(address(usdc), address(weth), 500e18);
+        vm.prank(executor);
+        vm.expectEmit(true, false, false, true);
+        emit TranscriptCommitted(id, h);
+        guard.executeTradeWithTranscript(id, address(router), address(usdc), address(weth), 500e18, quoted, true, h);
+        assertEq(guard.tradeCountOf(id), 1);
+        // same policy, same guard: a stranger cannot use the transcript form either
+        vm.prank(stranger);
+        vm.expectRevert("Guard: not executor");
+        guard.executeTradeWithTranscript(id, address(router), address(usdc), address(weth), 500e18, quoted, true, h);
     }
 
     function test_Registry_AttestedViaVerifier() public {

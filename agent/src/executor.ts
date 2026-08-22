@@ -1,4 +1,4 @@
-import { parseUnits, type Address, type TransactionReceipt } from "viem";
+import { parseUnits, type Address, type Hex, type TransactionReceipt } from "viem";
 import { guardAbi, venueAbi } from "./abi.js";
 import { config, publicClient, walletClient, type MarketSnapshot } from "./chain.js";
 import type { TradeIntent } from "./brain.js";
@@ -59,24 +59,21 @@ export async function prepare(intent: TradeIntent, snapshot: MarketSnapshot): Pr
   return { tokenIn, tokenOut, amountIn, minAmountOut, fromVault: snapshot.book === "vault" };
 }
 
-/** Simulate, sign, wait. Returns the receipt so the caller can price the gas. */
-export async function execute(trade: PreparedTrade, tokenId: bigint = config.tokenId): Promise<TransactionReceipt> {
+/**
+ * Simulate, sign, wait. Returns the receipt so the caller can price the gas.
+ * With a transcript hash the trade goes through executeTradeWithTranscript and
+ * the chain carries the evidence (TranscriptCommitted).
+ */
+export async function execute(trade: PreparedTrade, tokenId: bigint = config.tokenId, transcript?: Hex): Promise<TransactionReceipt> {
   const wallet = walletClient();
-  const { request } = await publicClient.simulateContract({
-    account: wallet.account,
-    address: config.guard,
-    abi: guardAbi,
-    functionName: "executeTrade",
-    args: [
-      tokenId,
-      config.router,
-      trade.tokenIn,
-      trade.tokenOut,
-      trade.amountIn,
-      trade.minAmountOut,
-      trade.fromVault,
-    ],
-  });
-  const hash = await wallet.writeContract(request);
+  const base = [tokenId, config.router, trade.tokenIn, trade.tokenOut, trade.amountIn, trade.minAmountOut, trade.fromVault] as const;
+  let hash: Hex;
+  if (transcript) {
+    const { request } = await publicClient.simulateContract({ account: wallet.account, address: config.guard, abi: guardAbi, functionName: "executeTradeWithTranscript", args: [...base, transcript] });
+    hash = await wallet.writeContract(request);
+  } else {
+    const { request } = await publicClient.simulateContract({ account: wallet.account, address: config.guard, abi: guardAbi, functionName: "executeTrade", args: [...base] });
+    hash = await wallet.writeContract(request);
+  }
   return publicClient.waitForTransactionReceipt({ hash });
 }

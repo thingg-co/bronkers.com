@@ -17,7 +17,7 @@ function tradesTable(brain) {
     el("tr", {},
       el("td", { title: fmt.date(t.ts) }, fmt.when(t.ts)),
       el("td", {}, (() => { const d = describeVenueTrade(t); return [d.text, d.detail ? el("span", { class: "muted small" }, " · ", d.detail) : null]; })()),
-      el("td", {}, badge(t.fromVault ? "vault" : "own book", t.fromVault ? "accent" : "muted")),
+      el("td", {}, badge(t.fromVault ? "vault" : "own book", t.fromVault ? "accent" : "muted"), t.transcript ? [" ", el("span", { class: "badge muted", title: `The runtime committed the hash of the inference transcript behind this trade: ${t.transcript}` }, "transcript")] : null),
       el("td", { class: "mono" }, t.hash ? (explorerAddr(t.hash) ? el("a", { href: `${state.cfg.explorer}/tx/${t.hash}`, target: "_blank", rel: "noopener" }, fmt.hash(t.hash)) : fmt.hash(t.hash)) : `block ${t.block}`)));
   return el("div", { class: "tablewrap" }, el("table", { class: "table trades" },
     el("thead", {}, el("tr", {}, el("th", {}, "When"), el("th", {}, "Trade"), el("th", {}, "Book"), el("th", {}, "Tx"))),
@@ -167,7 +167,8 @@ function identity(brain) {
       ["Vault", addrChip(brain.vault, { explorer: ex })],
       brain.runtime ? ["Runs in", brain.runtime.kind === "enclave" ? [badge("the enclave", "good"), " ", brain.runtime.attested ? badge(brain.runtime.attestation === 2 ? "attested runtime · TDX quote" : "attested runtime · reviewed", "good") : brain.runtime.registered ? badge("registered runtime", "accent") : badge("operated", "muted"), " ", el("span", { class: "muted" }, `last trade ${brain.runtime.lastTradeAt ? fmt.when(brain.runtime.lastTradeAt) : "never"}`)] : brain.runtime.kind === "self" ? [badge("self-hosted", "accent"), " ", el("span", { class: "muted" }, "operated by the owner")] : badge("not running", "bad"), brain.runtime.attested ? (brain.runtime.attestation === 2 ? "The executor key presented a TDX quote that the chain's DCAP verifier accepted; the quote binds this key and the enclave key to a runtime measurement the protocol has approved." : "The executor key is registered to a runtime measurement the protocol has approved. Self-reported and reviewed, not signed by hardware.") : "Attested execution (TEE) is on the roadmap; until then “AI-traded” is an operator claim and “operated” is the honest label."] : null,
       brain.runtime && brain.runtime.registered ? ["Runtime measurement", el("span", { class: "mono small" }, brain.runtime.measurement), brain.runtime.attestation === 2 ? "keccak256 of the TD's MRTD and RTMRs, read from the verified quote" : "sha256 of the runtime's source bundle, registered by the executor key"] : null,
-      brain.runtimeFee != null ? ["Runtime fee", `${fmt.amt(brain.runtimeFee, 18, 4)} mUSDC per trade · at most ${brain.genome.cadence} a day (${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC)`, "Paid from the traded book to the executor on each trade, to cover gas and model calls. Protocol-capped, and bounded per day because trades are."] : null,
+      brain.runtimeFee != null ? ["Runtime fee", `${fmt.amt(brain.runtimeFee, 18, 4)} mUSDC per trade · at most ${brain.genome.cadence} a day (${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC)${brain.feesGated ? " · paid only to an attested executor" : ""}${brain.minFeeNotionalBps ? `, on trades of at least ${fmt.bps(brain.minFeeNotionalBps)} of NAV` : ""}`, "Paid from the traded book to the executor on each trade, to cover gas and model calls. Protocol-capped, bounded per day because trades are, paid only for evidence: an attested runtime, a trade of real size."] : null,
+      brain.pendingRuntimeFee && brain.pendingRuntimeFee.effectiveAt && brain.runtime && brain.pendingRuntimeFee.effectiveAt > brain.runtime.now ? ["Fee raise scheduled", `${fmt.amt(brain.pendingRuntimeFee.fee, 18, 4)} mUSDC per trade in about ${fmt.duration(brain.pendingRuntimeFee.effectiveAt - brain.runtime.now)}`, "Fee raises take effect after a notice period so depositors see them coming; lowering is immediate."] : null,
       executor != null ? ["Executor", executor && executor !== "0x0000000000000000000000000000000000000000" ? addrChip(executor, { explorer: ex }) : badge("not set", "muted"), "The hot key that signs trades. It can only call executeTrade."] : null,
       brain.genome.custody !== 0 ? ["Sealed jar", brain.envelopePublished ? "published on-chain (ciphertext)" : "not published", "The encrypted genome; only the enclave key opens it."] : null,
       ["Custody", [c.label, " — ", el("span", { class: "muted" }, c.blurb)]],
@@ -224,7 +225,7 @@ export async function render(root, { id }) {
     internship(brain),
     actionsPanel(brain, refresh),
     el("h3", { class: "section-sub" }, "Track record"),
-    el("p", { class: "muted" }, "Every row is a ", el("code", {}, "TradeExecuted"), " event from the guard. Recompute it yourself; this page only summarises."),
+    el("p", { class: "muted" }, "Every row is a ", el("code", {}, "TradeExecuted"), " event from the guard. Recompute it yourself; this page only summarises.", brain.transcripts ? ` ${brain.transcripts} of ${brain.trades.length} trades carry a transcript hash: the runtime's evidence of what the model saw and decided, checkable against a disclosed transcript.` : ""),
     tradesTable(brain),
     el("div", { class: "two-col" }, vaultTerms(brain), identity(brain)),
     tokenPanel(brain)]);
