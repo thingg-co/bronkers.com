@@ -841,26 +841,26 @@ pre code {
     border-bottom: 2px solid var(--border-color);
 }
 
-/* sealed custody (1 and 2): the lid is a cork. A wooden stopper set into the
-   neck, slightly wider at the top, with a hint of grain; authored jars keep
-   the plain lid, so the custody reads off the jar before the badge does */
+/* sealed custody (1 and 2): a wooden cap across the top of the jar, covering
+   the mouth — grain, a lit top edge, a darker rim where it meets the glass;
+   authored jars keep the plain grey lid, so the custody reads off the jar
+   before the badge does */
 .jar.sealed .jar-lid {
-    left: 20%;
-    right: 20%;
-    height: 17%;
+    height: 16%;
     background:
-        repeating-linear-gradient(90deg, rgba(92, 56, 24, 0.14) 0 1px, transparent 1px 4px),
-        linear-gradient(180deg, #dcb48a 0%, #c0905e 55%, #a8774a 100%);
+        repeating-linear-gradient(90deg, rgba(92, 56, 24, 0.16) 0 1px, transparent 1px 5px),
+        linear-gradient(180deg, #dcb48a 0%, #c99b6b 45%, #b07f4f 100%);
     border: 0;
-    border-radius: 0.2rem 0.2rem 0.35rem 0.35rem;
-    box-shadow: inset 0 2px 0 rgba(255, 240, 220, 0.45), inset 0 -3px 0 rgba(92, 56, 24, 0.35), 0 1px 2px rgba(0, 0, 0, 0.18);
-    clip-path: polygon(0 0, 100% 0, 91% 100%, 9% 100%);
+    border-bottom: 2px solid rgba(92, 56, 24, 0.5);
+    border-radius: 0.7rem 0.7rem 0.1rem 0.1rem;
+    box-shadow: inset 0 2px 0 rgba(255, 240, 220, 0.5), inset 0 -3px 4px rgba(92, 56, 24, 0.22);
 }
 
 [data-theme="dark"] .jar.sealed .jar-lid {
     background:
-        repeating-linear-gradient(90deg, rgba(40, 22, 8, 0.28) 0 1px, transparent 1px 4px),
-        linear-gradient(180deg, #b98a5d 0%, #9a6b40 55%, #7f5532 100%);
+        repeating-linear-gradient(90deg, rgba(30, 16, 6, 0.32) 0 1px, transparent 1px 5px),
+        linear-gradient(180deg, #b98a5d 0%, #9a6b40 45%, #7f5532 100%);
+    border-bottom-color: rgba(20, 10, 2, 0.6);
 }
 
 .jar-brain {
