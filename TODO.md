@@ -88,10 +88,12 @@ it is linked.
 
 ## Testnet and operations
 
-- [ ] **Polygon Amoy deploy.** `DEPLOYER_KEY=… ./protocol/script/deploy-testnet.sh`,
-      fill the 80002 block of `js/config.js`, open a lease job on the printed
-      `hostMarket`, run the farm on a machine, fill the enclave fields from
-      `/health`, marketplace links.
+- [ ] **Polygon Amoy deploy: the public paper market.** `DEPLOYER_KEY=…
+      ./protocol/script/deploy-testnet.sh` (the paper venue quotes Chainlink
+      ETH/USD and BTC/USD there), fill the 80002 block of `js/config.js`, open a
+      lease job on the printed `hostMarket`, run one public farm (harvester),
+      fill the enclave fields from `/health`, point brokners.com's Terminal at
+      it, marketplace links. Then anyone can learn on it with faucet money.
 - [ ] **Snapshot refresh.** Regenerate `data/traders.json` from the testnet
       once brains exist there (`npm run report`), so the offline fallback on
       brokners.com shows real records.

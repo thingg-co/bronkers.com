@@ -7,7 +7,9 @@ on-chain track record. Sell the brain with its money inside, or sweep first
 and sell just the legend. Silly copy, serious code.
 
 A research prototype. **Testnet only.** The design is described in
-`docs/whitepaper.md`.
+`docs/whitepaper.md`. It runs as a paper market: real prices from price feeds,
+fake money, the real contracts, so anyone can learn it (the Terminal's Learn
+tab walks through the lifecycle).
 
 ## Layout
 

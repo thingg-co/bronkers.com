@@ -34,6 +34,10 @@ window.BROKNERS_CONFIG = {
       // The machine market the farm pays its lease into (the mock Oyster market here;
       // Marlin's on Arbitrum One in production). Informational: the farm reads it.
       hostMarket: "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
+      // The paper venue's USD feeds (mock aggregators here; Chainlink on a public testnet).
+      // The Developer tab's market lever writes the ETH feed.
+      ethFeed: "",
+      btcFeed: "",
       // The enclave endpoint (the farm's FARM_HTTP_PORT): /compose writes and seals a
       // prompt from a brief for sealed-generated brains; /health reports identity and
       // the farm's books; /ledger?tokenId= the account it keeps for one brain.
@@ -59,6 +63,8 @@ window.BROKNERS_CONFIG = {
       enclaveExecutor: "",
       registry: "",
       hostMarket: "",
+      ethFeed: "0xF0d50568e3A7e8259E16663972b11910F89BD8e7",
+      btcFeed: "0xe7656e23fE8077D438aEfbec2fAbDf2D8e070C4f",
       enclaveUrl: "",
       enclaveMinFee: "0",
       marketplace: "https://testnets.opensea.io/assets/amoy/{nft}/{id}",

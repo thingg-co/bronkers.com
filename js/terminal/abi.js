@@ -130,7 +130,16 @@ export const tbaAbi = parseAbi([
 
 export const venueAbi = parseAbi([
   "function quote(address tokenIn, address tokenOut, uint256 amountIn) view returns (uint256)",
+  "function usdPrice(address token) view returns (uint256)",
+  "function spreadBps() view returns (uint16)",
   "function setPrice(address tokenIn, address tokenOut, uint256 p)",
+]);
+
+/** Chainlink-shaped USD feeds; the mock one is settable (the Developer tab's market lever). */
+export const aggregatorAbi = parseAbi([
+  "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
+  "function decimals() view returns (uint8)",
+  "function setAnswer(int256 answer)",
 ]);
 
 export const CUSTODY = [

@@ -3,7 +3,7 @@
 // normal visitor; it is how we run the Terminal against anvil.
 import { parseUnits } from "https://esm.sh/viem@2.21.19";
 import * as act from "../actions.js";
-import { erc20Abi, venueAbi } from "../abi.js";
+import { aggregatorAbi, erc20Abi, venueAbi } from "../abi.js";
 import { chains, clearOverride, connectDev, disconnect, reload, saveOverride, selectChain, state } from "../chain.js";
 import { invalidate, loadFarmHealth } from "../data.js";
 import { badge, clear, el, fmt, kv, textField, toast } from "../ui.js";
@@ -13,7 +13,9 @@ const FIELDS = [
   ["explorer", "Explorer URL (optional)", "Base URL for address/tx links, e.g. https://amoy.polygonscan.com"],
   ["traderNFT", "TraderNFT", "The brain collection. Printed by Deploy.s.sol."],
   ["guard", "ExecutionGuard", "The trust boundary: the only contract the executor key can usefully call."],
-  ["router", "Venue / router", "The curated venue brains trade through (MockSwapRouter locally)."],
+  ["router", "Venue (paper market)", "The curated venue brains trade through: the paper venue quotes from USD feeds and fills at that price less a spread, minting the mock tokens."],
+  ["ethFeed", "ETH/USD feed", "The paper venue's price feed for mWETH (a settable mock here; Chainlink on a public testnet). The market lever writes it."],
+  ["btcFeed", "BTC/USD feed", "The paper venue's price feed for mWBTC."],
   ["usdc", "mUSDC", "Base asset and vault collateral."],
   ["weth", "mWETH", "Curated market token."],
   ["wbtc", "mWBTC", "Curated market token."],
@@ -108,20 +110,20 @@ export async function render(root) {
   async function showPrice() {
     try {
       const q = await state.pub.readContract({ address: cfg.router, abi: venueAbi, functionName: "quote", args: [cfg.weth, cfg.usdc, parseUnits("1", 18)] });
-      priceInfo.textContent = `1 mWETH = ${fmt.amt(q)} mUSDC on the mock venue`;
+      priceInfo.textContent = `1 mWETH = ${fmt.amt(q)} mUSDC on the paper venue (feed price less the spread on fills)`;
       return q;
     } catch { priceInfo.textContent = "Venue quote unavailable."; return null; }
   }
-  const nudge = (pct) => el("button", { class: "btn", disabled: !state.account || !cfg.testnet, onclick: async () => {
-    const q = await showPrice();
-    if (q == null) return;
-    const next = (q * BigInt(100 + pct)) / 100n;
-    const inv = (10n ** 36n) / next;
-    const ok = await act.runSteps(`Move mWETH ${pct > 0 ? "+" : ""}${pct}%`, [
-      { label: `Set mWETH/mUSDC to ${fmt.amt(next)}`, run: () => act.tx({ address: cfg.router, abi: venueAbi, functionName: "setPrice", args: [cfg.weth, cfg.usdc, next] }) },
-      { label: "Set the inverse quote", run: () => act.tx({ address: cfg.router, abi: venueAbi, functionName: "setPrice", args: [cfg.usdc, cfg.weth, inv] }) },
-    ]);
-    if (ok) { invalidate(); showPrice(); }
+  // the paper venue quotes from the ETH/USD feed; moving the market means writing the feed (mock only)
+  const nudge = (pct) => el("button", { class: "btn", disabled: !state.account || !cfg.testnet || !cfg.ethFeed, title: cfg.ethFeed ? "" : "No ETH/USD feed configured", onclick: async () => {
+    try {
+      const [, answer] = await state.pub.readContract({ address: cfg.ethFeed, abi: aggregatorAbi, functionName: "latestRoundData" });
+      const next = (answer * BigInt(100 + pct)) / 100n;
+      const ok = await act.runSteps(`Move ETH/USD ${pct > 0 ? "+" : ""}${pct}%`, [
+        { label: `Set the ETH/USD feed to ${fmt.amt(next, 8)}`, run: () => act.tx({ address: cfg.ethFeed, abi: aggregatorAbi, functionName: "setAnswer", args: [next] }) },
+      ]);
+      if (ok) { invalidate(); showPrice(); }
+    } catch (e) { toast(act.explain(e), "err"); }
   } }, `${pct > 0 ? "+" : ""}${pct}%`);
   priceRow.append(nudge(-10), nudge(-3), nudge(3), nudge(10));
   showPrice();

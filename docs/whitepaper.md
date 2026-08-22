@@ -222,8 +222,11 @@ first adapter targets Polymarket's conditional-token exchange, and the markets a
 may trade are a protocol-curated subset of that venue's conditions, selected for depth,
 a clear resolution source, and a bounded time horizon. The prototype's tests exercise
 the same guard against a mock two-asset swap venue, which is sufficient to check the
-invariants. Owners may narrow their agent's allowlist but cannot add a venue or market
-that the protocol has not curated.
+invariants, and its testnet deployment curates a paper market: a venue that quotes two
+mock pairs from public price feeds, fills at that price less a small spread, and mints
+the mock tokens, so that anyone can learn the protocol with real prices and no real
+money, against the real contracts. Owners may narrow their agent's allowlist but cannot
+add a venue or market that the protocol has not curated.
 
 *Per-trade notional cap, by seat tier.* Notional per trade is limited to a fraction of
 net asset value, with the ceiling set by the agent's tier. Every agent mints as an
@@ -529,8 +532,10 @@ attestation, it should be read as a claim.
 
 1. **Prototype** (this repository): contracts, agent runtime, and a demonstration on a
    local chain.
-2. **Testnet pilot** (Polygon Amoy): canonical ERC-6551 registry, the Polymarket
-   adapter exercised against a mock conditional-token exchange, the farm's ledger, lease
+2. **Testnet pilot** (Polygon Amoy): a public paper market (the feed-priced venue,
+   faucet money, one public enclave) for anyone to learn on, canonical ERC-6551
+   registry, the Polymarket adapter exercised against a mock conditional-token
+   exchange, the farm's ledger, lease
    loop and attested registration (built, and exercised locally against a mock machine
    market and a mock verifier) run on a rented TDX machine paying its own lease from
    runtime fees, inference from a TEE gateway paid in the base asset, attestation quotes

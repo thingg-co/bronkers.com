@@ -10,13 +10,18 @@ import {TraderNFT} from "../src/TraderNFT.sol";
 import {JarRenderer} from "../src/JarRenderer.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
-import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
+import {PaperVenue} from "../src/PaperVenue.sol";
+import {MockAggregator} from "../src/mocks/MockAggregator.sol";
 import {MockOysterMarket} from "../src/mocks/MockOysterMarket.sol";
 import {RuntimeRegistry} from "../src/RuntimeRegistry.sol";
 import {AutomataDcapTdxVerifier, IAutomataDcapAttestation} from "../src/AutomataDcapTdxVerifier.sol";
 import {IVenue} from "../src/interfaces/ITraderNFT.sol";
 
-/// Local/testnet deployment. On public testnets the canonical ERC-6551
+/// Local/testnet deployment: a paper market. The curated venue is PaperVenue,
+/// which quotes mWETH/mUSDC and mWBTC/mUSDC from USD feeds (ETH_USD_FEED /
+/// BTC_USD_FEED, Chainlink on a public testnet; settable MockAggregators when
+/// unset), fills at the feed less a spread and mints the mock tokens.
+/// On public testnets the canonical ERC-6551
 /// registry (0x000000006551c19487814612e58FE06813775758) replaces the local
 /// one, and where Automata DCAP is deployed (Polygon, Polygon Amoy, Arbitrum,
 /// Base, and their testnets: 0xaDdeC7e85c2182202b66E331f2a4A0bBB2cEEa1F) the
@@ -29,11 +34,17 @@ contract Deploy is Script {
         MockERC20 usdc = new MockERC20("Mock USDC", "mUSDC");
         MockERC20 weth = new MockERC20("Mock WETH", "mWETH");
         MockERC20 wbtc = new MockERC20("Mock WBTC", "mWBTC");
-        MockSwapRouter router = new MockSwapRouter();
-        router.setPrice(address(weth), address(usdc), 2_000e18);
-        router.setPrice(address(usdc), address(weth), 1e36 / 2_000e18);
-        router.setPrice(address(wbtc), address(usdc), 60_000e18);
-        router.setPrice(address(usdc), address(wbtc), uint256(1e36) / 60_000e18);
+        // feeds: Chainlink where configured (Amoy: ETH/USD 0xF0d50568e3A7e8259E16663972b11910F89BD8e7,
+        // BTC/USD 0xe7656e23fE8077D438aEfbec2fAbDf2D8e070C4f), mock aggregators otherwise
+        address ethFeed = vm.envOr("ETH_USD_FEED", address(0));
+        address btcFeed = vm.envOr("BTC_USD_FEED", address(0));
+        if (ethFeed == address(0)) ethFeed = address(new MockAggregator("ETH / USD", 8, 2_000e8));
+        if (btcFeed == address(0)) btcFeed = address(new MockAggregator("BTC / USD", 8, 60_000e8));
+        PaperVenue router = new PaperVenue();
+        router.setFixedUsd(address(usdc), 1e18);
+        router.setFeed(address(weth), ethFeed);
+        router.setFeed(address(wbtc), btcFeed);
+        if (vm.envOr("PAPER_MAX_STALE", uint256(0)) > 0) router.setMaxStale(vm.envOr("PAPER_MAX_STALE", uint256(0)));
 
         // On public testnets the canonical 6551 registry already exists:
         // ERC6551_REGISTRY=0x000000006551c19487814612e58FE06813775758 forge script …
@@ -89,6 +100,8 @@ contract Deploy is Script {
         console.log("mUSDC:        ", address(usdc));
         console.log("mWETH:        ", address(weth));
         console.log("Router:       ", address(router));
+        console.log("EthFeed:      ", ethFeed);
+        console.log("BtcFeed:      ", btcFeed);
         console.log("6551 Registry:", address(registry));
         console.log("Account impl: ", address(accountImpl));
         console.log("Guard:        ", address(guard));

@@ -17,9 +17,10 @@ It is organised around four jobs:
 | Tab | Who it is for | What it does |
 |---|---|---|
 | **The Floor** | anyone, no wallet needed | every brain, live, sortable by return / NAV / trades / age / bell reward; filter to open vaults, interns, yours, or bells worth ringing |
+| **Learn** | newcomers | the lifecycle as numbered steps on this chain with your numbers: connect, paper money, birth, internship, watch, back, bell, train, pay the harvester, sell, what is enforced; steps tick themselves off from chain state |
 | **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → start. Sealed custody by default, entirely in the browser; the last step publishes the jar on-chain, seeds the wallet, authorises the guard, sets the runtime fee and enrols the brain with the enclave, so it is trading before you leave the page |
 | **My Desk** | owners, depositors, keepers | manage the brains you own (runtime fee, the account with the enclave, and **Training**: revise the brain into a new generation), see your vault positions, ring bells that pay |
-| **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, levers to move the mock market and the chain's clock, the farm's books, the runtime command |
+| **Developer** | us | chain / RPC / addresses (including the paper venue's feeds), a dev wallet for local anvil, a faucet, levers to move the ETH/USD feed and the chain's clock, the farm's books, the runtime command |
 
 Clicking a brain opens its page: share-price return since inception, vault NAV,
 own-book value, trade count, max drawdown, a share-price chart, the internship
@@ -31,6 +32,13 @@ commitment, model, declared cadence and the interval the guard enforces).
 Deposit, withdraw and Ring the Bell live there.
 
 ## How it behaves
+
+**A paper market.** The curated venue on every deployment is `PaperVenue`:
+it quotes mWETH/mUSDC and mWBTC/mUSDC from USD feeds (Chainlink on Polygon
+Amoy; settable mock aggregators on anvil, which is what the Developer tab's
+market lever writes), fills at the feed price less a small spread, and mints
+the mock tokens. Real prices, fake money, the real contracts: what a visitor
+learns here is what happens on the real thing.
 
 **Read-only first.** On load the Terminal picks a chain (the saved one, else the
 injected wallet's chain if it is configured, else the default) and opens a
@@ -108,7 +116,7 @@ js/terminal/crypto.js     canonicalize + commit (frozen), authored (AES-GCM) and
 js/terminal/venues.js     venue-aware trade/holding formatting (swap today; prediction
                           markets when the Polymarket adapter lands)
 js/terminal/ui.js         DOM helper, formatting, sparkline, modal, toast, fields
-js/terminal/views/        floor.js · brain.js · create.js · desk.js · dev.js
+js/terminal/views/        floor.js · learn.js · brain.js · create.js · desk.js · dev.js
 agent/src/farm.ts         the enclave runtime that runs every enrolled brain
 agent/src/budget.ts       the farm's ledger and credit policy
 agent/src/host.ts         the machine lease (Oyster-compatible market), read and topped up

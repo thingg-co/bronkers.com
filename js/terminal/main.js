@@ -5,6 +5,7 @@ import { $, clear, el, fmt, toast } from "./ui.js";
 
 const views = {
   floor: () => import("./views/floor.js"),
+  learn: () => import("./views/learn.js"),
   brain: () => import("./views/brain.js"),
   create: () => import("./views/create.js"),
   desk: () => import("./views/desk.js"),
@@ -13,6 +14,7 @@ const views = {
 
 const TABS = [
   ["floor", "The Floor", "#/"],
+  ["learn", "Learn", "#/learn"],
   ["create", "Birth a Brain", "#/create"],
   ["desk", "My Desk", "#/desk"],
   ["dev", "Developer", "#/dev"],

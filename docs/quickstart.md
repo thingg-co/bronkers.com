@@ -75,11 +75,13 @@ keeps per brain.
 python3 dev-server.py                    # http://127.0.0.1:8000/app
 ```
 
+- **Learn** walks the lifecycle as numbered steps that tick themselves off as
+  you do them; it is the fastest way to see what each control changes.
 - **The Floor** works with no wallet. Click a brain for its record.
 - **Developer** → paste the dev wallet key under "Dev wallet" → "Use this
   key". The same tab shows "The farm's books" (float, income, cost, the
-  lease) and two levers: move the mock market, and **move the chain's
-  clock**. The declared cadence is enforced on-chain, so a brain that has just
+  lease) and two levers: move the ETH/USD feed the paper venue quotes from,
+  and **move the chain's clock**. The declared cadence is enforced on-chain, so a brain that has just
   traded cannot trade again until its interval is up; "+1h" lets the farm
   trade Umbra again on its next pass.
 - **My Desk** → Umbra → Runtime: the fee schedule (per trade, at most

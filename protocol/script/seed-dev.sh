@@ -31,6 +31,7 @@ DEPLOY_OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url $RPC --pr
 addr() { echo "$DEPLOY_OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 USDC=$(addr "mUSDC:"); WETH=$(addr "mWETH:"); WBTC=$(addr "mWBTC:"); ROUTER=$(addr "Router:")
 GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:"); MARKET=$(addr "Market:")
+ETHFEED=$(addr "EthFeed:"); BTCFEED=$(addr "BtcFeed:")
 [ -n "$NFT" ] || { echo "deploy failed:"; echo "$DEPLOY_OUT" | tail -20; exit 1; }
 
 # a fresh chain means fresh books: the farm's ledger and transcripts belong to the chain that was just replaced
@@ -63,7 +64,7 @@ fund_and_authorise_tba() { # tokenId amount
   local approve; approve=$(cast calldata "approve(address,uint256)" $GUARD "$(cast max-uint)")
   send --private-key $OWNER_KEY "$tba" "execute(address,uint256,bytes,uint8)" $USDC 0 "$approve" 0
 }
-set_price() { send --private-key $OWNER_KEY $ROUTER "setPrice(address,address,uint256)" $WETH $USDC "$1"; }
+set_price() { send --private-key $OWNER_KEY $ETHFEED "setAnswer(int256)" "$1"; }   # ETH/USD, 8 decimals; the paper venue quotes from it
 publish() { # tokenId envelopeFile — the sealed jar goes on-chain as an event so the farm can find it
   send --private-key $OWNER_KEY $NFT "publishEnvelope(uint256,bytes)" "$1" "0x$(xxd -p "agent/$2" | tr -d '\n')"
 }
@@ -93,9 +94,9 @@ send --private-key $LP_KEY $USDC "mint(address,uint256)" $LP_ADDR 100000ether
 send --private-key $LP_KEY $USDC "approve(address,uint256)" $VAULT1 100000ether
 send --private-key $LP_KEY $VAULT1 "deposit(uint256,address)" 10000ether $LP_ADDR
 warp 3600;                    tick 1 ./genome.dev1.json
-set_price 2200ether; warp 3600; tick 1 ./genome.dev1.json
-set_price 2100ether; warp 3600; tick 1 ./genome.dev1.json
-set_price 2500ether; warp 3600; tick 1 ./genome.dev1.json
+set_price 220000000000; warp 3600; tick 1 ./genome.dev1.json
+set_price 210000000000; warp 3600; tick 1 ./genome.dev1.json
+set_price 250000000000; warp 3600; tick 1 ./genome.dev1.json
 echo "   Umbra: $(call $GUARD "tradeCountOf(uint256)(uint32)" 1) trades, NAV $(call $VAULT1 "totalAssets()(uint256)")"
 
 echo "── brain #2: sealed-authored, seasoned, open to deposits ──"
@@ -148,6 +149,8 @@ cat <<EOF
     enclavePublicKey: "$ENCLAVE_PUB",
     registry: "$REG",
     hostMarket: "$MARKET",
+    ethFeed: "$ETHFEED",
+    btcFeed: "$BTCFEED",
 
 dev wallet (anvil #0, owner of all three brains): $OWNER_KEY
 LP wallet  (anvil #2, holds Umbra shares):        $LP_KEY
@@ -161,13 +164,13 @@ EOF
 
 # keep js/config.js's anvil block in sync with what was just deployed (SEED_CONFIG=0 skips this)
 if [ "${SEED_CONFIG:-1}" != "0" ]; then
-python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" "$MARKET" <<'PY'
+python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" "$MARKET" "$ETHFEED" "$BTCFEED" <<'PY'
 import re, sys, pathlib
-nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry, market = sys.argv[1:]
+nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry, market, ethFeed, btcFeed = sys.argv[1:]
 p = pathlib.Path("js/config.js"); t = p.read_text()
 start = t.index("    31337: {"); end = t.index("    },", start)
 block = t[start:end]
-for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry, hostMarket=market).items():
+for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry, hostMarket=market, ethFeed=ethFeed, btcFeed=btcFeed).items():
     block = re.sub(rf'(\s{k}: )"[^"]*"', rf'\g<1>"{v}"', block)
 p.write_text(t[:start] + block + t[end:])
 print("js/config.js anvil block updated")

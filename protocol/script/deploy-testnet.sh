@@ -21,8 +21,15 @@ if [ -z "${DCAP_ATTESTATION:-}" ] && [ "$(cast code --rpc-url "$RPC" $AUTOMATA_D
 fi
 export RUNTIME_FEE_DELAY=${RUNTIME_FEE_DELAY:-86400}   # fee raises take a day to bite on a public testnet
 export REVISION_NOTICE=${REVISION_NOTICE:-86400}       # a revised genome waits a day (and spars) before it trades the vault
+# the paper venue quotes from Chainlink where it exists; Polygon Amoy feeds (8 decimals, 120 s heartbeat)
+if [ "$CHAIN" = "80002" ]; then
+  export ETH_USD_FEED=${ETH_USD_FEED:-0xF0d50568e3A7e8259E16663972b11910F89BD8e7}
+  export BTC_USD_FEED=${BTC_USD_FEED:-0xe7656e23fE8077D438aEfbec2fAbDf2D8e070C4f}
+  export PAPER_MAX_STALE=${PAPER_MAX_STALE:-3600}
+  echo "paper venue priced from Chainlink ETH/USD and BTC/USD on Amoy"
+fi
 OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast 2>&1)
-echo "$OUT" | grep -E "mWBTC|mUSDC|mWETH|Router|Guard|TraderNFT|RuntimeReg|Market|DcapVerifier|6551 Registry|Account impl"
+echo "$OUT" | grep -E "mWBTC|mUSDC|mWETH|Router|EthFeed|BtcFeed|Guard|TraderNFT|RuntimeReg|Market|DcapVerifier|6551 Registry|Account impl"
 addr() { echo "$OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 cat <<CFG
 
@@ -35,6 +42,8 @@ cat <<CFG
       wbtc: "$(addr 'mWBTC:')",
       registry: "$(addr 'RuntimeReg:')",
       hostMarket: "$(addr 'Market:')",
+      ethFeed: "$(addr 'EthFeed:')",
+      btcFeed: "$(addr 'BtcFeed:')",
       // then: run the farm (agent: npm run farm) with FARM_HTTP_PORT, and fill
       // enclavePublicKey / enclaveExecutor / enclaveUrl from its /health output.
       // Lease on this testnet: open a job on hostMarket from the farm's key (see

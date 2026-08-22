@@ -67,7 +67,12 @@ session needs to know that the code doesn't say.
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
 - Venues/tokens protocol-curated (two markets: mWETH/mUSDC, mWBTC/mUSDC);
-  owners narrow, never add.
+  owners narrow, never add. The curated venue on anvil and testnets is
+  `PaperVenue` (Aug 2026): a paper market quoting from USD feeds (Chainlink
+  ETH/USD `0xF0d5…8e7` / BTC/USD `0xe765…C4f` on Amoy; `MockAggregator`
+  locally, written by the Developer tab's lever), filling at feed less 10 bps,
+  minting mock tokens; the test fixture keeps `MockSwapRouter`. The Terminal
+  has a Learn tab (views/learn.js) that walks the lifecycle.
 - **Declared cadence is enforced on-chain** (Aug 2026): `tradeIntervalOf` =
   max(owner `minTradeInterval`, 1 day / `cadenceOf`), checked in
   executeTrade (first trade exempt); mint requires cadence ≥ 1. Owners

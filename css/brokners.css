@@ -1163,6 +1163,30 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
 .token-img { width: 7rem; height: 7rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); flex: none; }
 
 
+/* Learn tab: the lifecycle as numbered steps that tick themselves off from chain state */
+.learn-steps { display: grid; gap: var(--space-md); margin-top: var(--space-md); }
+.learn-step {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    gap: var(--space-sm) var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.8rem;
+    background: var(--bg-card);
+}
+.learn-step.done { border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-color)); }
+.learn-no {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: var(--text-lg);
+    color: var(--accent-primary);
+    line-height: 1.2;
+}
+.learn-body h4 { margin: 0 0 var(--space-xs); }
+.learn-body p { margin: 0 0 var(--space-xs); }
+.learn-body .btn-row { margin-top: var(--space-sm); }
+@media (max-width: 560px) { .learn-step { grid-template-columns: 1fr; } .learn-no { display: none; } }
+
 /* 8. Documents (.doc) -------------------------------------------------------- */
 /* The paper and the architecture note. Markup is
    <main><div class="container"><article class="doc">…</article></div></main>

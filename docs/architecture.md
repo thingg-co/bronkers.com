@@ -240,8 +240,16 @@ the measurement. `Deploy.s.sol` wires it when `DCAP_ATTESTATION` is set;
 
 ### 2.5 Mocks (prototype only)
 
+`PaperVenue` is the curated venue on anvil and on public testnets: a paper market that
+quotes each curated token in USD from a Chainlink-shaped feed (the base asset is fixed at
+1 USD), derives the cross rate, fills at that price less `spreadBps` (10), mints the mock
+`tokenOut` to the source book and keeps `tokenIn`; stale or non-positive feed answers are
+refused. On Amoy the feeds are Chainlink ETH/USD and BTC/USD; locally they are
+`MockAggregator`s the Developer tab's market lever writes. Unlimited depth at the oracle
+price: nothing for a brain to manipulate, and NAV follows the feed.
 `MockERC20` (open mint), `MockSwapRouter` (settable price, exact-in `swap()`,
-`quote()` view, adjustable execution-vs-quote skew for negative slippage tests),
+`quote()` view, adjustable execution-vs-quote skew for negative slippage tests; the test
+fixture's venue),
 `MockOysterMarket` (the machine market: `jobOpen`/`jobDeposit`/`jobSettle`/`jobs`,
 per-second rate with `EXTRA_DECIMALS`, the same surface as Marlin's MarketV1 so the
 farm's lease code is identical locally and in production), `MockQuoteVerifier` and
@@ -406,8 +414,8 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 
 | Environment | Registry | Venue | Attestation | Machine market | Purpose |
 |---|---|---|---|---|---|
-| anvil (local) | deployed by `Deploy.s.sol` | `MockSwapRouter` | none (self-reported) | `MockOysterMarket` | tests + demo (primary target) |
-| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | Automata DCAP `0xaDdeC7…Ea1F` via the adapter | `MockOysterMarket` (the real lease is on Arbitrum) | public testnet pilot (`protocol/script/deploy-testnet.sh`) |
+| anvil (local) | deployed by `Deploy.s.sol` | `PaperVenue` over `MockAggregator` feeds (tests: `MockSwapRouter`) | none (self-reported) | `MockOysterMarket` | tests + demo (primary target) |
+| Polygon Amoy | canonical `0x…5758` | `PaperVenue` over Chainlink ETH/USD, BTC/USD (the paper market); Polymarket adapter vs. mock CTF exchange later | Automata DCAP `0xaDdeC7…Ea1F` via the adapter | `MockOysterMarket` (the real lease is on Arbitrum) | public paper market + testnet pilot (`protocol/script/deploy-testnet.sh`) |
 | Polygon mainnet | canonical `0x…5758` | Polymarket CTF Exchange | Automata DCAP | Marlin Oyster market on Arbitrum One, fees bridged by CCTP | limited run, agent-owned capital only; gated on audit |
 
 ## 7. Threat model
