@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC6551Registry} from "erc6551/ERC6551Registry.sol";
 import {ERC6551Account} from "erc6551/examples/simple/ERC6551Account.sol";
 import {TraderNFT} from "../src/TraderNFT.sol";
+import {JarRenderer} from "../src/JarRenderer.sol";
 import {TraderVault} from "../src/TraderVault.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
@@ -46,7 +47,8 @@ abstract contract BaseTest is Test {
             address(accountImpl),
             guard,
             IERC20(address(usdc)),
-            IVenue(address(router))
+            IVenue(address(router)),
+            new JarRenderer()
         );
         guard.setNFT(address(nft), address(usdc));
         guard.setCuratedVenue(address(router), true);

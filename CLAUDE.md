@@ -125,7 +125,9 @@ session needs to know that the code doesn't say.
   `TranscriptCommitted` with the keccak256 of the inference transcript
   (agent/src/transcript.ts; kept under its hash in FARM_TRANSCRIPTS_DIR). The
   site calls operators **harvesters**; they harvest the fee, never the returns.
-  `TraderNFT.tokenURI` on-chain JSON + jar SVG. The farm self-registers
+  `TraderNFT.tokenURI` on-chain JSON + jar SVG, rendered by `JarRenderer`
+  (separate contract: TraderNFT embeds TraderVault's creation code and sits
+  ~2 KB under the 24 KB limit; keep new logic out of it). The farm self-registers
   (`agent/src/measure.ts`; FARM_QUOTE_PATH for the hardware path), serves
   `/compose`, `/health`, `/ledger` on FARM_HTTP_PORT, honours FARM_MIN_FEE.
   `protocol/script/deploy-testnet.sh` for Polygon Amoy.

@@ -4,9 +4,8 @@ pragma solidity ^0.8.26;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC6551Registry} from "erc6551/interfaces/IERC6551Registry.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ITraderNFT, IVenue} from "./interfaces/ITraderNFT.sol";
+import {Card, IJarRenderer} from "./JarRenderer.sol";
 import {ExecutionGuard} from "./ExecutionGuard.sol";
 import {TraderVault} from "./TraderVault.sol";
 
@@ -50,6 +49,7 @@ contract TraderNFT is ERC721, ITraderNFT {
     ExecutionGuard public immutable guard;
     IERC20 public immutable baseAsset;
     IVenue public immutable defaultVenue;
+    IJarRenderer public immutable renderer; // tokenURI lives there to keep this contract under the size limit
     bytes32 public constant TBA_SALT = bytes32(0);
 
     /// One brain per bit: the collection is hard-capped at 2^12.
@@ -93,13 +93,15 @@ contract TraderNFT is ERC721, ITraderNFT {
         address accountImplementation_,
         ExecutionGuard guard_,
         IERC20 baseAsset_,
-        IVenue defaultVenue_
+        IVenue defaultVenue_,
+        IJarRenderer renderer_
     ) ERC721("Brokners", "BRKNR") {
         registry = registry_;
         accountImplementation = accountImplementation_;
         guard = guard_;
         baseAsset = baseAsset_;
         defaultVenue = defaultVenue_;
+        renderer = renderer_;
     }
 
     /// @notice Mint a trader. The plaintext genome never touches the chain:
@@ -224,39 +226,24 @@ contract TraderNFT is ERC721, ITraderNFT {
     }
 
     /// @notice On-chain metadata: name, public traits, and a brain in a jar,
-    /// so any marketplace renders the token without a server of ours.
+    /// so any marketplace renders the token without a server of ours. Rendered
+    /// by JarRenderer; this contract only supplies the facts.
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireOwned(tokenId);
         Genome memory g = _genomes[tokenId];
-        string memory name_ = bytes(_names[tokenId]).length > 0 ? _names[tokenId] : string.concat("Brain #", Strings.toString(tokenId));
-        string[3] memory custody = ["authored", "sealed", "sealed-generated"];
-        string[3] memory risk = ["conservative", "balanced", "aggressive"];
-        string[3] memory tiers = ["Intern", "Associate", "Partner"];
-        uint8 tier = guard.tierOf(tokenId);
-        string memory svg = string.concat(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">',
-            '<rect width="64" height="64" fill="#fff0f6"/>',
-            // sealed jars are corked; authored jars have a plain lid
-            g.custody == CUSTODY_AUTHORED
-                ? '<rect x="15" y="3" width="34" height="10" rx="3" fill="#343a40"/>'
-                : '<path d="M21 2h22l-2 12H23z" fill="#c0905e"/><path d="M26 4v8M31 4v8M36 4v8M40 4v8" stroke="#8b5a2b" stroke-width="1" opacity=".55"/>',
-            '<rect x="11" y="12" width="42" height="49" rx="10" fill="#a5d8ff" fill-opacity=".38" stroke="#74c0fc" stroke-width="3"/>',
-            '<ellipse cx="25.5" cy="38" rx="11" ry="13" fill="#f06595"/><ellipse cx="38.5" cy="38" rx="11" ry="13" fill="#f06595"/>',
-            '<ellipse cx="32" cy="36" rx="9" ry="11" fill="#f06595"/><path d="M32 26V50" stroke="#c2255c" stroke-width="2.2" stroke-linecap="round"/>',
-            '<text x="32" y="58" font-family="monospace" font-size="5" text-anchor="middle" fill="#343a40">#', Strings.toString(tokenId), "</text></svg>"
+        return renderer.tokenURI(
+            Card({
+                tokenId: tokenId,
+                name: _names[tokenId],
+                custody: g.custody,
+                risk: g.riskProfile,
+                cadence: g.cadence,
+                model: g.model,
+                birthBlock: g.birthBlock,
+                tier: guard.tierOf(tokenId),
+                generation: generationOf(tokenId)
+            })
         );
-        string memory json = string.concat(
-            '{"name":"', name_, '","description":"A Brokner: a sealed AI trading brain with an immutable on-chain track record. One brain per bit.",',
-            '"image":"data:image/svg+xml;base64,', Base64.encode(bytes(svg)), '",',
-            '"attributes":[{"trait_type":"Custody","value":"', custody[g.custody], '"},',
-            '{"trait_type":"Risk","value":"', risk[g.riskProfile < 3 ? g.riskProfile : 1], '"},',
-            '{"trait_type":"Seat","value":"', tiers[tier < 3 ? tier : 0], '"},',
-            '{"trait_type":"Cadence (per day)","value":', Strings.toString(g.cadence), '},',
-            '{"trait_type":"Model","value":"', g.model, '"},',
-            '{"trait_type":"Generation","value":', Strings.toString(generationOf(tokenId)), '},',
-            '{"trait_type":"Birth block","value":', Strings.toString(g.birthBlock), '}]}'
-        );
-        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
     }
 
     /// @notice Publish the sealed envelope so an enclave can run the brain

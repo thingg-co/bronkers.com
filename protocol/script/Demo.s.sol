@@ -7,6 +7,7 @@ import {ERC6551Account} from "erc6551/examples/simple/ERC6551Account.sol";
 import {IERC6551Registry} from "erc6551/interfaces/IERC6551Registry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {TraderNFT} from "../src/TraderNFT.sol";
+import {JarRenderer} from "../src/JarRenderer.sol";
 import {TraderVault} from "../src/TraderVault.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
@@ -45,7 +46,8 @@ contract Demo is Script {
             address(accountImpl),
             guard,
             IERC20(address(usdc)),
-            IVenue(address(router))
+            IVenue(address(router)),
+            new JarRenderer()
         );
         guard.setNFT(address(nft), address(usdc));
         guard.setCuratedVenue(address(router), true);

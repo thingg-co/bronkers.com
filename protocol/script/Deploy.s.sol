@@ -7,6 +7,7 @@ import {ERC6551Account} from "erc6551/examples/simple/ERC6551Account.sol";
 import {IERC6551Registry} from "erc6551/interfaces/IERC6551Registry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {TraderNFT} from "../src/TraderNFT.sol";
+import {JarRenderer} from "../src/JarRenderer.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
@@ -43,12 +44,14 @@ contract Deploy is Script {
         RuntimeRegistry runtimeRegistry = new RuntimeRegistry();
         // demo paper season: one own-book trade required before outside deposits
         ExecutionGuard guard = new ExecutionGuard(0, 1);
+        JarRenderer renderer = new JarRenderer(); // tokenURI rendering, kept out of the collection contract
         TraderNFT nft = new TraderNFT(
             IERC6551Registry(address(registry)),
             address(accountImpl),
             guard,
             IERC20(address(usdc)),
-            IVenue(address(router))
+            IVenue(address(router)),
+            renderer
         );
         guard.setNFT(address(nft), address(usdc));
         guard.setMaxRuntimeFee(5e18); // a brain may pay its executor at most 5 mUSDC per trade

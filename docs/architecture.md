@@ -88,7 +88,9 @@ struct Genome {
 - `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
   record cannot be laundered by renaming.
 - `tokenURI(id)` — on-chain `data:application/json;base64` metadata with the jar SVG and
-  public traits (custody, risk, seat, cadence, model, birth block).
+  public traits (custody, risk, seat, cadence, model, generation, birth block), rendered
+  by `JarRenderer` (a separate contract; TraderNFT embeds the vault it deploys per mint
+  and would otherwise exceed the code-size limit).
 - `publishEnvelope(id, bytes)` — owner-only, sealed custody only, ≤ 16 KB; emits
   `EnvelopePublished(id, envelope)` (an event, not storage) so the enclave can find the
   sealed jar by scanning logs. Re-publishable; the commitment never changes.
