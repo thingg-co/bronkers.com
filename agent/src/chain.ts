@@ -23,6 +23,7 @@ export const config = {
   nft: env("TRADER_NFT_ADDRESS") as Address,
   guard: env("GUARD_ADDRESS") as Address,
   router: env("ROUTER_ADDRESS") as Address,
+  registry: (process.env.REGISTRY_ADDRESS ?? "") as Address,
   genomePath: process.env.GENOME_PATH ?? "./genome.local.json",
   genomeKey: process.env.GENOME_KEY ?? "",
 };

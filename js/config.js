@@ -15,8 +15,8 @@ window.BROKNERS_CONFIG = {
       explorer: "",
       currency: "ETH",
       testnet: true,
-      traderNFT: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      guard: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      traderNFT: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      guard: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
       router: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       usdc: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
       weth: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
@@ -24,10 +24,20 @@ window.BROKNERS_CONFIG = {
       // base64 SPKI of the dev enclave's X25519 key; seed-dev.sh prints a
       // fresh one each run — paste it in the Developer panel to mint sealed
       // brains from the browser against your local chain.
-      enclavePublicKey: "MCowBQYDK2VuAyEA4A6puRjFRwW2QylzH+4IyRnbNeBUyZm9C8ByTi5B6FA",
+      enclavePublicKey: "MCowBQYDK2VuAyEA9SdFj5u822G6GI6WkNdc62Iw8rH5fo7XUBP2C9UjZWg",
       // The enclave's executor address. "Enrolling" a brain means setting its
       // executor to this key; the farm (agent: npm run farm) then runs it.
       enclaveExecutor: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      // RuntimeRegistry: executor key -> (measurement, enclave key); "attested" when the
+      // protocol has approved the measurement (self-reported today, TEE later).
+      registry: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      // The enclave endpoint (the farm's FARM_HTTP_PORT): /compose writes and seals a
+      // prompt from a brief for sealed-generated brains; /health reports identity.
+      enclaveUrl: "http://127.0.0.1:8787",
+      // Runtime fee (mUSDC per trade) this operator asks brains to pay; the wizard sets it.
+      enclaveMinFee: "1",
+      // Marketplace URL template for "list it" links ({nft}, {id}); none on a local chain.
+      marketplace: "",
     },
     80002: {
       name: "Polygon Amoy",
@@ -43,6 +53,10 @@ window.BROKNERS_CONFIG = {
       wbtc: "",
       enclavePublicKey: "",
       enclaveExecutor: "",
+      registry: "",
+      enclaveUrl: "",
+      enclaveMinFee: "0",
+      marketplace: "https://testnets.opensea.io/assets/amoy/{nft}/{id}",
     },
   },
 };

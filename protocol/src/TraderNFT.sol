@@ -4,6 +4,8 @@ pragma solidity ^0.8.26;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC6551Registry} from "erc6551/interfaces/IERC6551Registry.sol";
+import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ITraderNFT, IVenue} from "./interfaces/ITraderNFT.sol";
 import {ExecutionGuard} from "./ExecutionGuard.sol";
 import {TraderVault} from "./TraderVault.sol";
@@ -151,6 +153,38 @@ contract TraderNFT is ERC721, ITraderNFT {
     /// @notice The brain's name, or "" if it has none yet.
     function nameOf(uint256 tokenId) external view returns (string memory) {
         return _names[tokenId];
+    }
+
+    /// @notice On-chain metadata: name, public traits, and a brain in a jar,
+    /// so any marketplace renders the token without a server of ours.
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireOwned(tokenId);
+        Genome memory g = _genomes[tokenId];
+        string memory name_ = bytes(_names[tokenId]).length > 0 ? _names[tokenId] : string.concat("Brain #", Strings.toString(tokenId));
+        string[3] memory custody = ["authored", "sealed", "sealed-generated"];
+        string[3] memory risk = ["conservative", "balanced", "aggressive"];
+        string[3] memory tiers = ["Intern", "Associate", "Partner"];
+        uint8 tier = guard.tierOf(tokenId);
+        string memory svg = string.concat(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">',
+            '<rect width="64" height="64" fill="#fff0f6"/>',
+            '<rect x="15" y="3" width="34" height="10" rx="3" fill="#343a40"/>',
+            '<rect x="11" y="12" width="42" height="49" rx="10" fill="#a5d8ff" fill-opacity=".38" stroke="#74c0fc" stroke-width="3"/>',
+            '<ellipse cx="25.5" cy="38" rx="11" ry="13" fill="#f06595"/><ellipse cx="38.5" cy="38" rx="11" ry="13" fill="#f06595"/>',
+            '<ellipse cx="32" cy="36" rx="9" ry="11" fill="#f06595"/><path d="M32 26V50" stroke="#c2255c" stroke-width="2.2" stroke-linecap="round"/>',
+            '<text x="32" y="58" font-family="monospace" font-size="5" text-anchor="middle" fill="#343a40">#', Strings.toString(tokenId), "</text></svg>"
+        );
+        string memory json = string.concat(
+            '{"name":"', name_, '","description":"A Brokner: a sealed AI trading brain with an immutable on-chain track record. One brain per bit.",',
+            '"image":"data:image/svg+xml;base64,', Base64.encode(bytes(svg)), '",',
+            '"attributes":[{"trait_type":"Custody","value":"', custody[g.custody], '"},',
+            '{"trait_type":"Risk","value":"', risk[g.riskProfile < 3 ? g.riskProfile : 1], '"},',
+            '{"trait_type":"Seat","value":"', tiers[tier < 3 ? tier : 0], '"},',
+            '{"trait_type":"Cadence (per day)","value":', Strings.toString(g.cadence), '},',
+            '{"trait_type":"Model","value":"', g.model, '"},',
+            '{"trait_type":"Birth block","value":', Strings.toString(g.birthBlock), '}]}'
+        );
+        return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));
     }
 
     /// @notice Publish the sealed envelope so an enclave can run the brain

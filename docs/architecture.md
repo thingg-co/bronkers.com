@@ -68,6 +68,8 @@ struct Genome {
 - `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)` — getters.
 - `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
   record cannot be laundered by renaming.
+- `tokenURI(id)` — on-chain `data:application/json;base64` metadata with the jar SVG and
+  public traits (custody, risk, seat, cadence, model, birth block).
 - `publishEnvelope(id, bytes)` — owner-only, sealed custody only, ≤ 16 KB; emits
   `EnvelopePublished(id, envelope)` (an event, not storage) so the enclave can find the
   sealed jar by scanning logs. Re-publishable; the commitment never changes.
@@ -122,6 +124,18 @@ fuzz-tested (`Guardrails.t.sol`).
 
 `setPolicy(...)` / `setExecutor(...)` — only `traderNFT.ownerOf(tokenId)`, read live,
 so administrative control follows the token automatically on transfer.
+
+**Runtime fee.** `runtimeFeeOf[tokenId]` (owner-set via `setRuntimeFee`, ≤ the
+deployer's `maxRuntimeFee`) is paid in the base asset from the traded source to the
+executor after each successful `executeTrade`, and skipped if the source has no base
+left. Capped and post-trade, so the no-extraction invariant holds (Runtime.t.sol).
+
+### 2.2b RuntimeRegistry.sol
+
+`register(measurement, enclavePublicKey)` is called by an executor key; `approveMeasurement`
+is deployer-only; `attested(executor)` = registered and approved. The measurement is a
+sha256 over the agent source bundle (`agent/src/measure.ts`), self-reported by the farm
+at start. Honest label until a TEE signs it.
 
 ### 2.3 TraderVault.sol (ERC-4626 clone per trader)
 
@@ -234,7 +248,11 @@ verifies `commit(genome) == commitment`, and runs the brain at its declared cade
 Book selection: own wallet while unseasoned, vault once seasoned and funded, idle if
 neither holds funds or the wallet has not approved the guard. No persistence: it
 resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via
-`npm run loop`). Flags `--once`, `--mock-brain`, `--dry-run`; `FARM_POLL_SECONDS`.
+`npm run loop`). Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
+`FARM_POLL_SECONDS`, `FARM_MIN_FEE` (refuse brains paying less), `FARM_HTTP_PORT` (the
+enclave endpoint: `GET /health`, `POST /compose {brief, tweaks}` → `{commitment,
+envelope}` for sealed-generated brains; the prompt never leaves the process),
+`REGISTRY_ADDRESS` (self-register the runtime measurement at start).
 
 ## 4b. The Terminal
 
@@ -255,7 +273,7 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Environment | Registry | Venue | Purpose |
 |---|---|---|---|
 | anvil (local) | deployed by `Deploy.s.sol` | `MockSwapRouter` | tests + demo (primary target) |
-| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | public testnet pilot |
+| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | public testnet pilot (`protocol/script/deploy-testnet.sh`) |
 | Polygon mainnet | canonical `0x…5758` | Polymarket CTF Exchange | limited run, agent-owned capital only; gated on audit |
 
 ## 7. Threat model

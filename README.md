@@ -48,7 +48,11 @@ python3 dev-server.py              # open http://127.0.0.1:8000/app
 
 The Floor and every brain page work with no wallet. To act, connect a browser
 wallet pointed at `http://127.0.0.1:8545` (chain id 31337), or paste one of the
-dev keys the seed prints into the Developer tab. See `docs/terminal.md`.
+dev keys the seed prints into the Developer tab. Start the farm (the seed prints
+the command) and the enrolled brains trade by themselves. See `docs/terminal.md`.
+
+Public testnet: `DEPLOYER_KEY=0x… ./protocol/script/deploy-testnet.sh` deploys to
+Polygon Amoy and prints the `js/config.js` block.
 
 ## Payouts, plainly
 

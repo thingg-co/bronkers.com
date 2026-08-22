@@ -164,7 +164,9 @@ function identity(brain) {
       ["Owner", addrChip(brain.owner, { explorer: ex })],
       ["Brain's wallet", addrChip(brain.tba, { explorer: ex }), "ERC-6551 token-bound account. Whoever owns the token controls it."],
       ["Vault", addrChip(brain.vault, { explorer: ex })],
-      brain.runtime ? ["Runs in", brain.runtime.kind === "enclave" ? [badge("the enclave", "good"), " ", el("span", { class: "muted" }, `operated · last trade ${brain.runtime.lastTradeAt ? fmt.when(brain.runtime.lastTradeAt) : "never"}`)] : brain.runtime.kind === "self" ? [badge("self-hosted", "accent"), " ", el("span", { class: "muted" }, "operated by the owner")] : badge("not running", "bad"), "Attested execution (TEE) is on the roadmap; until then, “AI-traded” is an operator claim, and “operated” is the honest label."] : null,
+      brain.runtime ? ["Runs in", brain.runtime.kind === "enclave" ? [badge("the enclave", "good"), " ", brain.runtime.attested ? badge("attested runtime", "good") : brain.runtime.registered ? badge("registered runtime", "accent") : badge("operated", "muted"), " ", el("span", { class: "muted" }, `last trade ${brain.runtime.lastTradeAt ? fmt.when(brain.runtime.lastTradeAt) : "never"}`)] : brain.runtime.kind === "self" ? [badge("self-hosted", "accent"), " ", el("span", { class: "muted" }, "operated by the owner")] : badge("not running", "bad"), brain.runtime.attested ? "The executor key is registered to a runtime measurement the protocol has approved. Self-reported and reviewed; hardware attestation (TEE) is still to come." : "Attested execution (TEE) is on the roadmap; until then “AI-traded” is an operator claim and “operated” is the honest label."] : null,
+      brain.runtime && brain.runtime.registered ? ["Runtime measurement", el("span", { class: "mono small" }, brain.runtime.measurement), "sha256 of the runtime's source bundle, registered by the executor key"] : null,
+      brain.runtimeFee != null ? ["Runtime fee", `${fmt.amt(brain.runtimeFee, 18, 4)} mUSDC per trade`, "Paid from the traded book to the executor on each trade, to cover gas and model calls. Protocol-capped."] : null,
       executor != null ? ["Executor", executor && executor !== "0x0000000000000000000000000000000000000000" ? addrChip(executor, { explorer: ex }) : badge("not set", "muted"), "The hot key that signs trades. It can only call executeTrade."] : null,
       brain.genome.custody !== 0 ? ["Sealed jar", brain.envelopePublished ? "published on-chain (ciphertext)" : "not published", "The encrypted genome; only the enclave key opens it."] : null,
       ["Custody", [c.label, " — ", el("span", { class: "muted" }, c.blurb)]],
@@ -223,7 +225,21 @@ export async function render(root, { id }) {
     el("h3", { class: "section-sub" }, "Track record"),
     el("p", { class: "muted" }, "Every row is a ", el("code", {}, "TradeExecuted"), " event from the guard. Recompute it yourself; this page only summarises."),
     tradesTable(brain),
-    el("div", { class: "two-col" }, vaultTerms(brain), identity(brain))]);
+    el("div", { class: "two-col" }, vaultTerms(brain), identity(brain)),
+    tokenPanel(brain)]);
+}
+
+function tokenPanel(brain) {
+  if (!brain.token) return null;
+  const mk = state.cfg.marketplace ? state.cfg.marketplace.replace("{nft}", state.cfg.traderNFT).replace("{id}", String(brain.id)) : null;
+  return el("div", { class: "panel token-panel" },
+    el("h4", {}, "The token"),
+    el("div", { class: "token-row" },
+      brain.token.image ? el("img", { src: brain.token.image, alt: `${brain.label} token image`, class: "token-img" }) : null,
+      el("div", {},
+        el("p", { class: "muted" }, "Metadata lives on-chain (", el("code", {}, "tokenURI"), "): name, public traits, and the jar. Any ERC-721 marketplace renders it; the record, wallet and fee stream travel with it."),
+        el("p", { class: "card-badges" }, (brain.token.attributes || []).map((a) => badge(`${a.trait_type}: ${a.value}`))),
+        mk ? el("a", { class: "btn", href: mk, target: "_blank", rel: "noopener" }, "View on the marketplace") : null)));
 }
 
 function stat(label, value, sub) {

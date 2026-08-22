@@ -117,6 +117,14 @@ authored envelope opens only with the owner's key and publishing it would serve 
 purpose, and it may be repeated, for instance to re-seal to a new enclave key; the
 commitment the enclave verifies against never changes.
 
+Sealed-generated custody uses the same path with one extra step. The enclave exposes a
+small endpoint that accepts a brief, composes a prompt from it inside the process, seals
+the result to its own key, and returns only the commitment and the ciphertext; the
+plaintext is never written, returned, or logged. The minter commits that hash and
+publishes that envelope exactly as for a sealed-authored brain. The trust placed in the
+endpoint is the trust already placed in the enclave, and it is the same trust
+attestation is meant to discharge.
+
 ## 4. Token-Bound Ownership
 
 Each token controls a wallet of its own through the ERC-6551 token-bound account
@@ -247,6 +255,16 @@ Third, an attested runtime commits, with each trade, a hash of the full inferenc
 transcript (market snapshot in, trade intent out). The transcript can be disclosed on
 request for audit without exposing the genome.
 
+The prototype ships the registry half of this without the hardware half, and labels the
+difference. A `RuntimeRegistry` contract lets an executor key register the measurement
+of the runtime it belongs to (a hash over the runtime's source bundle) together with the
+enclave public key genomes are sealed to; the protocol can approve measurements it has
+reproduced. A brain whose executor is registered to an approved measurement is shown as
+running an attested runtime, with the qualification, stated wherever the label appears,
+that the measurement is self-reported and reviewed rather than signed by hardware. When
+a TEE is available, `register` gains a signature check over the same fields and nothing
+else moves.
+
 Behavioural statistics, such as round-the-clock cadence or sub-second reaction to
 on-chain events, are sometimes proposed as evidence of machine execution. In our view
 they can identify an inattentive human but cannot prove the absence of one; they are
@@ -277,9 +295,15 @@ the state, and a restart resumes from the last recorded trade. Brains under auth
 custody cannot be run by the farm, since only the owner holds the key, and remain self-
 hosted.
 
-In the prototype the operator bears gas and model costs. Reimbursing them from the
-brain's own wallet through the guard is the natural extension and is deferred to the
-next version.
+The enclave operator is reimbursed from the brain's own resources. The guard carries a
+per-brain runtime fee, set by the owner in the base asset and capped by a protocol
+constant, which is paid from whichever book the trade used (the vault or the brain's
+wallet) to the executor on each successful trade. It is paid after the swap and skipped
+if the book holds no base asset at that moment, so it can never block a trade or compete
+with it for capital; because it is capped and paid only on trades the guard has already
+bounded by notional, slippage, and cadence, it cannot become an extraction path. An
+operator publishes the fee it asks for and may decline to run brains that pay less. For
+a vault this is an ordinary fund expense, visible in the record like any other.
 
 ## 7. Verifiability of the Record
 
@@ -319,7 +343,9 @@ The agent is a standard ERC-721. Seaport, OpenSea, Blur, and the existing NFT
 infrastructure therefore operate on it without protocol-specific code, including trait
 filtering on the public genome traits and price discovery on the secondary market. An
 agent's floor price becomes a continuously quoted opinion on the value of a strategy
-together with its fee stream.
+together with its fee stream. The token's metadata (name, public traits, and an image)
+is generated on-chain by `tokenURI`, so no server of ours is needed for a marketplace to
+render it.
 
 ### 8.1 Purchaser due diligence
 

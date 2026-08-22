@@ -19,6 +19,8 @@ export const guardAbi = parseAbi([
   "function tbaNav(uint256 tokenId) view returns (uint256)",
   "function seasoned(uint256 tokenId) view returns (bool)",
   "function tradeCountOf(uint256 tokenId) view returns (uint32)",
+  "function runtimeFeeOf(uint256 tokenId) view returns (uint256)",
+  "function maxRuntimeFee() view returns (uint256)",
   "event TradeExecuted(uint256 indexed tokenId, address indexed venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, bool fromVault)",
 ]);
 
@@ -28,6 +30,12 @@ export const vaultAbi = parseAbi([
   "function asset() view returns (address)",
   "function universe() view returns (address[])",
   "event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)",
+]);
+
+export const registryAbi = parseAbi([
+  "function register(bytes32 measurement, bytes enclavePublicKey)",
+  "function runtimeOf(address executor) view returns (bytes32 measurement, bytes enclavePublicKey, uint64 registeredAt)",
+  "function attested(address executor) view returns (bool)",
 ]);
 
 export const venueAbi = parseAbi([

@@ -12,6 +12,7 @@ export const nftAbi = parseAbi([
   "function nameOf(uint256) view returns (string)",
   "function christen(uint256,string)",
   "function publishEnvelope(uint256,bytes)",
+  "function tokenURI(uint256) view returns (string)",
   "function mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
   "function safeTransferFrom(address,address,uint256)",
   "event TraderBorn(uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault)",
@@ -35,6 +36,10 @@ export const guardAbi = parseAbi([
   "function setExecutor(uint256,address)",
   "function setPolicy(uint256,uint16,uint16,uint64)",
   "function setTokenAllowed(uint256,address,bool)",
+  "function runtimeFeeOf(uint256) view returns (uint256)",
+  "function maxRuntimeFee() view returns (uint256)",
+  "function setRuntimeFee(uint256,uint256)",
+  "event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee)",
   "event TradeExecuted(uint256 indexed tokenId, address indexed venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, bool fromVault)",
   "event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee)",
   "event ExecutorSet(uint256 indexed tokenId, address executor)",
@@ -80,6 +85,12 @@ export const erc20Abi = parseAbi([
   "function approve(address,uint256) returns (bool)",
   "function transfer(address,uint256) returns (bool)",
   "function mint(address,uint256)",
+]);
+
+export const registryAbi = parseAbi([
+  "function runtimeOf(address) view returns (bytes32 measurement, bytes enclavePublicKey, uint64 registeredAt)",
+  "function attested(address) view returns (bool)",
+  "function approvedMeasurement(bytes32) view returns (bool)",
 ]);
 
 export const tbaAbi = parseAbi([

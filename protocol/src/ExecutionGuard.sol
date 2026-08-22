@@ -69,6 +69,15 @@ contract ExecutionGuard is ReentrancyGuard {
     mapping(uint256 => uint32) public tradeCountOf;
     mapping(uint256 => uint64) public firstTradeAt;
 
+    /// Runtime fee: a flat amount of the base asset paid from the traded book
+    /// to the executor on each successful trade, so an enclave operator can be
+    /// reimbursed for gas and model calls out of the brain's own resources.
+    /// Owner-set per brain, protocol-capped, zero by default, and best-effort:
+    /// if the source has no base left after the swap the fee is skipped rather
+    /// than blocking the trade. Bounded, so it cannot become an extraction path.
+    uint256 public maxRuntimeFee;
+    mapping(uint256 => uint256) public runtimeFeeOf;
+
     event TradeExecuted(
         uint256 indexed tokenId,
         address indexed venue,
@@ -84,6 +93,9 @@ contract ExecutionGuard is ReentrancyGuard {
     event TokenCurated(address indexed token, bool curated);
     event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee);
     event TierConfigured(uint8 tier, uint16 maxNotionalBps, uint256 fee);
+    event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee);
+    event MaxRuntimeFeeSet(uint256 fee);
+    event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee);
 
     modifier onlyTraderOwner(uint256 tokenId) {
         require(msg.sender == nft.ownerOf(tokenId), "Guard: not trader owner");
@@ -111,6 +123,20 @@ contract ExecutionGuard is ReentrancyGuard {
     function setTreasury(address treasury_) external {
         require(msg.sender == deployer, "Guard: not deployer");
         treasury = treasury_;
+    }
+
+    function setMaxRuntimeFee(uint256 fee) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        maxRuntimeFee = fee;
+        emit MaxRuntimeFeeSet(fee);
+    }
+
+    /// @notice What this brain pays its executor per trade, in base asset.
+    /// Owner-tunable up to the protocol cap.
+    function setRuntimeFee(uint256 tokenId, uint256 fee) external onlyTraderOwner(tokenId) {
+        require(fee <= maxRuntimeFee, "Guard: fee above cap");
+        runtimeFeeOf[tokenId] = fee;
+        emit RuntimeFeeSet(tokenId, fee);
     }
 
     /// @notice Upgrade a brain's seat. Upgrades only, one-time fee per jump,
@@ -243,6 +269,14 @@ contract ExecutionGuard is ReentrancyGuard {
         if (firstTradeAt[tokenId] == 0) firstTradeAt[tokenId] = uint64(block.timestamp);
         tradeCountOf[tokenId]++;
         emit TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut, fromVault);
+
+        // best-effort runtime reimbursement, after the swap so it never
+        // competes with the trade itself for the source's base balance
+        uint256 fee = runtimeFeeOf[tokenId];
+        if (fee > 0 && fee <= maxRuntimeFee && IERC20(baseAsset).balanceOf(source) >= fee) {
+            IERC20(baseAsset).safeTransferFrom(source, msg.sender, fee);
+            emit RuntimeFeePaid(tokenId, msg.sender, fee);
+        }
     }
 
     /// @notice Paper-season gate, checked by the vault before outside

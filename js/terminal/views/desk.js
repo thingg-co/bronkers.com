@@ -16,6 +16,7 @@ const TIPS = {
   interval: "Minimum seconds between trades, enforced on-chain. 0 = no limit beyond the declared cadence.",
   transfer: "Sends the token. Everything in the brain's wallet goes with it; sweep first to keep the capital.",
   jar: "The sealed envelope (.sealed.json) this brain was minted with. Publishing puts the ciphertext on-chain so an enclave can run the brain.",
+  fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol; skipped when the book has no cash.",
 };
 import { custodyBadge, jar, statusBadge } from "./floor.js";
 
@@ -51,17 +52,22 @@ async function manage(brain, refresh) {
   const sealed = brain.genome.custody !== 0;
   const enclaveCfg = state.cfg.enclaveExecutor;
   const rtBadge = rt.kind === "enclave" ? badge("Enrolled with the enclave", "good") : rt.kind === "self" ? badge("Self-hosted", "accent") : badge("Not running", "bad");
+  const idBadge = rt.kind === "none" ? null : rt.attested ? badge("attested runtime", "good") : rt.registered ? badge("registered runtime", "accent") : badge("operated", "muted");
+  const feeField = amountField({ label: "Runtime fee per trade", value: formatUnits(brain.runtimeFee || 0n, 18), tip: TIPS.fee });
   const now = Math.floor(Date.now() / 1000);
   const nextText = rt.nextDue ? (rt.nextDue > now ? `in about ${fmt.duration(rt.nextDue - now)}` : "due on the next pass") : "on the next pass";
   const execField = textField({ label: "Executor key (advanced)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, tip: TIPS.executor });
   const jarInput = el("input", { type: "file", accept: ".json,application/json", class: "jarfile", title: TIPS.jar });
   const runtimePanel = mk("Runtime",
-    el("div", { class: "runtime-status" }, rtBadge, rt.kind !== "none" ? el("span", { class: "muted" }, `last trade ${rt.lastTradeAt ? fmt.when(rt.lastTradeAt) : "never"} · next tick ${nextText}`) : el("span", { class: "muted" }, "nobody is running this brain")),
+    el("div", { class: "runtime-status" }, rtBadge, idBadge, rt.kind !== "none" ? el("span", { class: "muted" }, `last trade ${rt.lastTradeAt ? fmt.when(rt.lastTradeAt) : "never"} · next tick ${nextText}`) : el("span", { class: "muted" }, "nobody is running this brain")),
     kv([
       ["Executor", brain.policy.executor === ZERO ? badge("not set", "muted") : addrChip(brain.policy.executor, { explorer: ex })],
       ["Declared cadence", `${brain.genome.cadence}/day (every ${fmt.duration(rt.intervalSec)})`],
       ["Jar", sealed ? (brain.envelopePublished ? badge("published on-chain", "good") : badge("not published", "bad")) : "with you (authored custody — you run it)"],
+      rt.measurement && rt.registered ? ["Runtime measurement", [el("span", { class: "mono small" }, `${rt.measurement.slice(0, 14)}…`), " ", el("span", { class: "muted small" }, rt.attested ? "approved by the protocol (self-reported, not hardware-attested)" : "self-reported, not yet approved")]] : null,
+      ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)})`],
     ]),
+    el("div", { class: "inline-form" }, feeField.el, el("button", { class: "btn", onclick: async () => { try { await run("Runtime fee", act.setRuntimeFee(brain.id, feeField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Set fee")),
     sealed && !brain.envelopePublished ? el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Publish the sealed jar ", tip(TIPS.jar))), jarInput), el("button", { class: "btn", onclick: async () => {
       const f = jarInput.files && jarInput.files[0]; if (!f) return toast("Choose the .sealed.json file first.", "err");
       const text = await f.text();
@@ -114,7 +120,7 @@ async function manage(brain, refresh) {
   // fees + sell
   const toField = textField({ label: "Transfer to (sell the whole guy)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital.", tip: TIPS.transfer });
   const feesPanel = mk("Fees & sale",
-    kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`]]),
+    kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`], ["Marketplace", state.cfg.marketplace ? el("a", { href: state.cfg.marketplace.replace("{nft}", state.cfg.traderNFT).replace("{id}", String(brain.id)), target: "_blank", rel: "noopener" }, "list or view it") : el("span", { class: "muted" }, "the token has on-chain metadata (name, traits, jar image); any ERC-721 marketplace renders it — none is configured for this chain")]]),
     el("div", { class: "btn-row" },
       brain.fees.feeShares > 0n ? el("button", { class: "btn", onclick: () => run("Redeem fee shares", act.redeemFeeShares(brain), refresh) }, "Redeem fee shares to me") : null,
       ringable(brain) ? el("button", { class: "btn", onclick: () => run("Ring the bell", act.ring(brain), refresh) }, "🔔 Ring the bell") : null),

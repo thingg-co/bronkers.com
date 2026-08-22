@@ -1082,6 +1082,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent-primary); }
 .runtime-status { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; font-size: var(--text-sm); }
 .runtime-status .badge { font-size: var(--text-sm); padding: 2px var(--space-sm); }
 input[type="file"].jarfile { font-size: var(--text-sm); }
+.token-row { display: flex; gap: var(--space-md); align-items: flex-start; flex-wrap: wrap; }
+.token-img { width: 7rem; height: 7rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); flex: none; }
 
 
 /* 8. Documents (.doc) -------------------------------------------------------- */

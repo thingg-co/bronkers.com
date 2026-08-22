@@ -96,6 +96,12 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol`):
 - `TraderNFT.publishEnvelope(tokenId, bytes)` → `EnvelopePublished` — the
   sealed jar as an event, so the enclave finds it by scanning logs. Sealed
   custody only; re-publishable.
+- `TraderNFT.tokenURI` — on-chain metadata with the jar image; the brain page
+  renders it and links to the configured marketplace.
+- `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee` — the
+  per-trade reimbursement a brain pays its executor; shown and set in My Desk.
+- `RuntimeRegistry.runtimeOf / attested` — runtime identity for the
+  "attested runtime" / "registered runtime" / "operated" labels.
 
 Everything else was already public: `policyOf`, `tierOf`, `tiers`, `seasoned`,
 `tradeCountOf`, `firstTradeAt`, `seasonMinTrades`, `seasonDuration`, `tbaNav`,
@@ -114,8 +120,9 @@ configured per chain), HKDF-SHA256 with info `brokners-genome-v2`, AES-256-GCM.
 The envelope is byte-compatible with `agent/src/enclave.ts`; the dev harness
 mints a browser-sealed brain and has the Node runtime open it, verify the
 commitment and trade. The plaintext never leaves the tab unencrypted, and the
-browser keeps no key. Sealed-and-generated custody needs the enclave to write
-the prompt and stays CLI-only until there is an enclave endpoint.
+browser keeps no key. Sealed-and-generated custody calls the enclave endpoint
+(`enclaveUrl` → `POST /compose`): the brief goes in, the commitment and sealed
+envelope come out, and the prompt never exists outside the enclave process.
 
 ## Developing against anvil
 
@@ -141,7 +148,11 @@ it changes, and what it cannot change.
 
 - Polymarket adapter: `venues.js` already formats prediction-market trades
   ("Bought 1,400 YES at 36¢ · question") from a `venues` / `markets` map in
-  `config.js`; the adapter and the TBA-as-order-signer work are the real task.
-- `tokenURI` with the jar SVG so marketplaces render brains; a "list it" link.
-- Attested execution label ("attested" vs "operated") once the registry exists.
-- Public testnet (Polygon Amoy) addresses in `config.js`.
+  `config.js`. The real work is the `IVenue` adapter over the CTF exchange
+  and the TBA-as-order-signer; it also needs venue-per-brain at mint (today
+  every brain uses the NFT's default venue).
+- Hardware attestation: the registry, labels and farm self-measurement are in
+  place; a TEE (AWS Nitro) adds the signature over the same fields.
+- Public testnet: `protocol/script/deploy-testnet.sh` deploys to Polygon Amoy
+  with a funded key and prints the `config.js` block; then run the farm and
+  fill `enclavePublicKey` / `enclaveExecutor` / `enclaveUrl` from `/health`.

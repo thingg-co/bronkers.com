@@ -1,11 +1,13 @@
-import { formatUnits, type Address, type Hex } from "viem";
+import { createServer } from "node:http";
+import { formatUnits, parseUnits, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { erc20Abi, guardAbi, traderNftAbi, vaultAbi } from "./abi.js";
+import { erc20Abi, guardAbi, registryAbi, traderNftAbi, vaultAbi } from "./abi.js";
 import { ClaudeBrain, MockBrain, type Brain } from "./brain.js";
-import { config, publicClient, snapshot, type Book } from "./chain.js";
-import { type SealedEnvelope, unseal } from "./enclave.js";
+import { config, publicClient, snapshot, walletClient, type Book } from "./chain.js";
+import { composePrompt, enclavePublicKeyOf, seal, type SealedEnvelope, unseal } from "./enclave.js";
 import { execute, prepare } from "./executor.js";
 import { commit, type Genome } from "./genome.js";
+import { measureRuntime } from "./measure.js";
 
 /**
  * The farm: one enclave process that runs every brain enrolled with it.
@@ -19,19 +21,42 @@ import { commit, type Genome } from "./genome.js";
  * the internship, the vault once the brain is seasoned and funded. Nothing is
  * persisted; the chain is the state, so a restart just resumes.
  *
+ * Identity: on start the farm measures its own source bundle and registers
+ * (measurement, enclave public key) under its executor key in the
+ * RuntimeRegistry, if one is configured. Self-reported, not hardware-attested.
+ *
+ * Economics: a brain may pay its executor a per-trade runtime fee (owner-set,
+ * protocol-capped). FARM_MIN_FEE (base units, default 0) lets an operator
+ * refuse brains that pay less.
+ *
+ * Enclave endpoint (optional, FARM_HTTP_PORT): GET /health, POST /compose
+ * {brief, tweaks} -> {commitment, envelope} for sealed-generated brains. The
+ * prompt is composed and sealed in-process and never returned.
+ *
  * Flags: --once (tick every due brain once, then exit), --mock-brain,
- *        --dry-run. Env: FARM_POLL_SECONDS (default 30).
+ *        --dry-run, --measure (print the runtime measurement and exit).
+ * Env: FARM_POLL_SECONDS (default 30), FARM_MIN_FEE, FARM_HTTP_PORT, REGISTRY_ADDRESS.
  */
 const args = new Set(process.argv.slice(2));
 const once = args.has("--once");
 const dryRun = args.has("--dry-run");
 const useMock = args.has("--mock-brain");
 const pollMs = Math.max(5, Number(process.env.FARM_POLL_SECONDS ?? 30)) * 1000;
+const minFee = parseUnits(process.env.FARM_MIN_FEE ?? "0", 18);
+const httpPort = Number(process.env.FARM_HTTP_PORT ?? 0);
+
+const measurement = measureRuntime();
+if (args.has("--measure")) {
+  console.log(measurement);
+  process.exit(0);
+}
 
 const enclaveKey = process.env.ENCLAVE_PRIVATE_KEY ?? "";
 if (!enclaveKey) throw new Error("farm needs ENCLAVE_PRIVATE_KEY (the enclave's sealing key)");
+const enclavePub = enclavePublicKeyOf(enclaveKey);
 const me = privateKeyToAccount(process.env.EXECUTOR_PRIVATE_KEY as Hex).address;
 console.log(`farm up · executor ${me} · nft ${config.nft} · poll ${pollMs / 1000}s${useMock ? " · mock brain" : ""}`);
+console.log(`runtime measurement ${measurement}`);
 
 interface Running {
   tokenId: bigint;
@@ -49,6 +74,28 @@ function note(tokenId: bigint, reason: string) {
   if (skipped.get(tokenId) !== reason) {
     skipped.set(tokenId, reason);
     console.log(`#${tokenId}: ${reason}`);
+  }
+}
+
+/** Bind this executor key to the runtime it is running, if a registry is configured. */
+async function registerRuntime(): Promise<void> {
+  if (!config.registry) return;
+  try {
+    const [have] = await publicClient.readContract({ address: config.registry, abi: registryAbi, functionName: "runtimeOf", args: [me] });
+    if (have === measurement) {
+      console.log(`registry: already registered with this measurement`);
+      return;
+    }
+    const wallet = walletClient();
+    const { request } = await publicClient.simulateContract({
+      account: wallet.account, address: config.registry, abi: registryAbi, functionName: "register",
+      args: [measurement, toHex(Buffer.from(enclavePub, "base64"))],
+    });
+    const hash = await wallet.writeContract(request);
+    await publicClient.waitForTransactionReceipt({ hash });
+    console.log(`registry: registered measurement + enclave key under ${me} (${hash})`);
+  } catch (e) {
+    console.error(`registry: could not register: ${e instanceof Error ? e.message : e}`);
   }
 }
 
@@ -75,6 +122,14 @@ async function enrol(): Promise<void> {
     if (executor.toLowerCase() !== me.toLowerCase()) {
       if (running.delete(tokenId)) console.log(`#${tokenId}: unenrolled (executor changed)`);
       continue;
+    }
+    if (minFee > 0n) {
+      const fee = await publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "runtimeFeeOf", args: [tokenId] });
+      if (fee < minFee) {
+        if (running.delete(tokenId)) console.log(`#${tokenId}: paused (runtime fee below this operator's minimum)`);
+        note(tokenId, `runtime fee ${formatUnits(fee, 18)} is below this operator's minimum ${formatUnits(minFee, 18)}; not running`);
+        continue;
+      }
     }
     if (running.has(tokenId)) continue;
 
@@ -148,7 +203,8 @@ async function tick(r: Running): Promise<void> {
   console.log(`${r.label}: swap ${formatUnits(trade.amountIn, 18)} ${trade.tokenIn} -> ${trade.tokenOut} (minOut ${formatUnits(trade.minAmountOut, 18)})`);
   if (dryRun) return;
   const hash = await execute(trade, r.tokenId);
-  console.log(`${r.label}: executed within guardrails ${hash}`);
+  const fee = await publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "runtimeFeeOf", args: [r.tokenId] });
+  console.log(`${r.label}: executed within guardrails ${hash}${fee > 0n ? ` · runtime fee ${formatUnits(fee, 18)}` : ""}`);
 }
 
 async function round(): Promise<void> {
@@ -166,6 +222,44 @@ async function round(): Promise<void> {
   if (!running.size) console.log("no brains enrolled with this key yet");
 }
 
+// ---- enclave endpoint (optional) ----
+function startHttp(): void {
+  if (!httpPort) return;
+  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type", "Access-Control-Allow-Methods": "GET,POST,OPTIONS", "Content-Type": "application/json" };
+  const server = createServer(async (req, res) => {
+    if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, cors);
+      res.end(JSON.stringify({ executor: me, enclavePublicKey: enclavePub, measurement, registry: config.registry || null, running: [...running.values()].map((r) => r.label) }));
+      return;
+    }
+    if (req.method === "POST" && req.url === "/compose") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 64_000) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const { brief, tweaks } = JSON.parse(body || "{}") as { brief?: string; tweaks?: Record<string, unknown> };
+          if (!brief || typeof brief !== "string" || brief.length > 4_000) throw new Error("brief must be a string up to 4000 characters");
+          const genome: Genome = { prompt: composePrompt(brief), tweaks: tweaks && typeof tweaks === "object" ? tweaks : {} };
+          const envelope = seal(JSON.stringify(genome), enclavePub);
+          // the plaintext exists only in this scope and is never returned or logged
+          res.writeHead(200, cors);
+          res.end(JSON.stringify({ commitment: commit(genome), envelope, custody: 2 }));
+        } catch (e) {
+          res.writeHead(400, cors);
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
+        }
+      });
+      return;
+    }
+    res.writeHead(404, cors);
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  server.listen(httpPort, "127.0.0.1", () => console.log(`enclave endpoint on http://127.0.0.1:${httpPort} (GET /health, POST /compose)`));
+}
+
+await registerRuntime();
+startHttp();
 do {
   try {
     await round();
@@ -174,3 +268,4 @@ do {
   }
   if (!once) await new Promise((r) => setTimeout(r, pollMs));
 } while (!once);
+if (once) process.exit(0);

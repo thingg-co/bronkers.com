@@ -19,6 +19,10 @@ const FIELDS = [
   ["wbtc", "mWBTC", "Curated market token."],
   ["enclavePublicKey", "Enclave public key (base64 SPKI)", "X25519 key sealed brains are encrypted to. From `npm run genome -- keygen` (seed-dev.sh writes it here)."],
   ["enclaveExecutor", "Enclave executor address", "The farm's hot key. Enrolling a brain means setting this as its executor; the farm then runs it."],
+  ["registry", "RuntimeRegistry", "Executor key → (runtime measurement, enclave key). 'Attested' when the protocol has approved the measurement."],
+  ["enclaveUrl", "Enclave endpoint URL", "The farm's HTTP endpoint (FARM_HTTP_PORT): /compose for sealed-generated brains, /health for identity."],
+  ["enclaveMinFee", "Enclave runtime fee (mUSDC per trade)", "What this operator asks brains to pay per trade; the wizard pre-fills it."],
+  ["marketplace", "Marketplace URL template", "For 'list it' links; use {nft} and {id}. Leave empty on a local chain."],
 ];
 
 export async function render(root) {
@@ -102,7 +106,7 @@ export async function render(root) {
       el("div", {}, el("p", { class: "field-label" }, "Move the mock market"), priceInfo, priceRow))),
     el("div", { class: "panel" }, el("h4", {}, "Runtime"),
       el("p", { class: "muted" }, "The farm is the enclave process that runs every brain enrolled with its key (sealed custody, jar published on-chain). One process, all brains:"),
-      el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} \\\n  EXECUTOR_PRIVATE_KEY=<key for ${cfg.enclaveExecutor || "the enclave executor"}> ENCLAVE_PRIVATE_KEY=<enclave sealing key> \\\n  npm run farm -- --mock-brain`)),
+      el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} REGISTRY_ADDRESS=${cfg.registry || "<RuntimeRegistry>"} \\\n  EXECUTOR_PRIVATE_KEY=<key for ${cfg.enclaveExecutor || "the enclave executor"}> ENCLAVE_PRIVATE_KEY=<enclave sealing key> \\\n  FARM_HTTP_PORT=8787 FARM_MIN_FEE=${cfg.enclaveMinFee || "0"} npm run farm -- --mock-brain`)),
       el("p", { class: "muted" }, "Authored brains are self-hosted by their owner, one process per brain, with the jar file and GENOME_KEY:"),
       el("pre", {}, el("code", {}, `cd agent && RPC_URL=${cfg.rpc} TOKEN_ID=<id> TRADER_NFT_ADDRESS=${cfg.traderNFT} \\\n  GUARD_ADDRESS=${cfg.guard} ROUTER_ADDRESS=${cfg.router} GENOME_PATH=./brain-<hash>.authored.json \\\n  GENOME_KEY=<key> EXECUTOR_PRIVATE_KEY=<executor key> npm run loop -- --mock-brain`))));
 }

@@ -26,6 +26,7 @@ const TIPS = {
   mgmt: "Charged on vault assets, streamed over time, minted as vault shares to the brain's own wallet. Max 5%/year.",
   perf: "Charged only on share-price gains above the high-water mark. Max 30%. Also minted to the brain's wallet, so it travels with the token.",
   fund: "The brain trades its own wallet first (the internship). Send it some mUSDC to trade with; you can sweep it back any time.",
+  fee: "What the brain pays its executor per trade, from the book it traded, to cover gas and model calls. Owner-set, capped by the protocol, skipped if the book has no cash. The enclave operator publishes the fee it asks for.",
 };
 
 const draft = {
@@ -71,7 +72,7 @@ function step2(root) {
   const opts = [
     { v: 1, title: "Sealed (recommended)", body: "Encrypted to the enclave's key before it leaves this page, and published on-chain as ciphertext so the enclave can run it with no file handoff. No owner, now or later, can read it. You know it because you wrote it; a buyer never will.", ok: enclaveOk, why: enclaveOk ? null : "Needs the enclave public key for this chain (Developer tab)." },
     { v: 0, title: "Authored", body: "Encrypted with a key you keep. You run the brain yourself (or hand the key to an operator), you hand the key to a buyer on sale, and every past owner keeps a copy. Simplest; leaks on resale.", ok: true },
-    { v: 2, title: "Sealed & generated", body: "You write a brief; the enclave composes the prompt and seals it. No human ever reads it. The enclave has to do the writing, so this runs from the CLI today.", ok: false, why: "CLI only for now: agent → npm run genome -- generate \"<brief>\"." },
+    { v: 2, title: "Sealed & generated", body: "Your text above is treated as a brief. The enclave composes the actual prompt from it, seals it, and returns only the commitment and the ciphertext. No human ever reads the prompt, including you.", ok: Boolean(state.cfg?.enclaveUrl), why: state.cfg?.enclaveUrl ? null : "Needs an enclave endpoint for this chain (Developer tab)." },
   ];
   const list = el("div", { class: "choice-list" }, opts.map((o) => el("label", { class: `choice ${o.ok ? "" : "disabled"} ${draft.custody === o.v ? "selected" : ""}` },
     el("input", { type: "radio", name: "custody", value: o.v, checked: draft.custody === o.v, disabled: !o.ok, onchange: () => { draft.custody = o.v; render(root); } }),
@@ -79,7 +80,7 @@ function step2(root) {
   return el("div", {},
     el("p", { class: "muted" }, "Custody is a public trait. It tells a buyer what they are actually buying, and it decides who can run the brain."),
     list,
-    nav(root, { onNext: () => { if (draft.custody === 2) { toast("Sealed & generated is CLI-only for now.", "err"); return false; } } }));
+    nav(root, { onNext: () => { if (draft.custody === 2 && !state.cfg.enclaveUrl) { toast("No enclave endpoint configured for this chain.", "err"); return false; } } }));
 }
 
 function step3(root) {
@@ -114,7 +115,7 @@ function genomeObj() {
 }
 
 function step4(root) {
-  const c = commit(genomeObj());
+  const c = draft.custody === 2 ? "computed by the enclave at mint" : commit(genomeObj());
   const custody = CUSTODY[draft.custody];
   return el("div", {},
     el("div", { class: "two-col" },
@@ -129,9 +130,9 @@ function step4(root) {
         draft.custody === 1 ? ["Sealed jar", "published on-chain as ciphertext (next step)"] : null,
       ])),
       el("div", { class: "panel" }, el("h4", {}, "Stays with you (secret)"), kv([
-        ["Prompt", `${draft.prompt.length} characters`],
+        [draft.custody === 2 ? "Brief" : "Prompt", `${draft.prompt.length} characters${draft.custody === 2 ? " (the enclave writes the prompt from it; nobody reads the result)" : ""}`],
         ["Tweaks", draft.tweaks ? "yes" : "none"],
-        draft.custody === 1 ? ["Decryption key", "none — only the enclave can open the jar"] : ["Decryption key", "shown once after minting; keep it"],
+        draft.custody === 0 ? ["Decryption key", "shown once after minting; keep it"] : ["Decryption key", "none — only the enclave can open the jar"],
       ]))),
     el("p", { class: "muted" }, state.account ? `Minting from ${fmt.addr(state.account)} on ${state.cfg.name}.` : "Connect a wallet to mint."),
     nav(root, { next: "Mint this brain", disabled: !state.account, onNext: () => mint(root) }));
@@ -146,7 +147,13 @@ async function mint(root) {
     let cid;
     let keyHex = null;
     let envelope = null;
-    if (draft.custody === 1) {
+    let commitmentFinal = commitment;
+    if (draft.custody === 2) {
+      const composed = await act.composeWithEnclave(draft.prompt, genome.tweaks);
+      commitmentFinal = composed.commitment;
+      envelope = composed.envelope;
+      cid = `onchain:EnvelopePublished`;
+    } else if (draft.custody === 1) {
       if (!(await canSeal())) throw new Error("This browser cannot do X25519 in WebCrypto; use Authored custody or the CLI.");
       envelope = await sealedEnvelope(genome, state.cfg.enclavePublicKey);
       cid = `onchain:EnvelopePublished`;
@@ -159,14 +166,14 @@ async function mint(root) {
     }
     let tokenId = null;
     const steps = [{ label: "Mint the brain (commitment + traits on-chain)", run: async () => {
-      tokenId = await act.mintBrain({ commitment, risk: draft.risk, cadence: draft.cadence, custody: draft.custody, model: draft.model, cid, universe: universe(), mgmtBps: draft.mgmtBps, perfBps: draft.perfBps });
+      tokenId = await act.mintBrain({ commitment: commitmentFinal, risk: draft.risk, cadence: draft.cadence, custody: draft.custody, model: draft.model, cid, universe: universe(), mgmtBps: draft.mgmtBps, perfBps: draft.perfBps });
       return { transactionHash: null };
     } }];
     if (draft.name) steps.push({ label: `Name it “${draft.name}”`, run: async () => act.christen(tokenId, draft.name)[0].run() });
-    const ok = await act.runSteps("Birth a brain", steps, { summary: el("p", {}, draft.custody === 1 ? "The sealed jar stays in this tab until you publish it in the next step." : "Your encrypted jar has downloaded. Keep it: the runtime needs it to think.") });
+    const ok = await act.runSteps("Birth a brain", steps, { summary: el("p", {}, draft.custody !== 0 ? "The sealed jar stays in this tab until you publish it in the next step." : "Your encrypted jar has downloaded. Keep it: the runtime needs it to think.") });
     if (!ok) return false;
     invalidate();
-    draft.result = { tokenId, keyHex, cid, commitment, envelope, started: false };
+    draft.result = { tokenId, keyHex, cid, commitment: commitmentFinal, envelope, started: false };
     if (keyHex) {
       await new Promise((resolve) => {
         const m = modal({ title: "Your genome key", body: el("div", {},
@@ -188,9 +195,11 @@ async function mint(root) {
 function step5(root) {
   const r = draft.result || {};
   const id = r.tokenId;
-  const sealed = draft.custody === 1;
+  const sealed = draft.custody !== 0;
   const enclave = state.cfg.enclaveExecutor;
+  const minFee = state.cfg.enclaveMinFee && Number(state.cfg.enclaveMinFee) > 0 ? String(state.cfg.enclaveMinFee) : null;
   const fund = amountField({ label: "Seed its wallet with", value: "100", tip: TIPS.fund });
+  const fee = amountField({ label: "Runtime fee per trade", value: minFee || "0", tip: TIPS.fee });
 
   const startSealed = async () => {
     try {
@@ -199,6 +208,7 @@ function step5(root) {
         ...act.publishEnvelope(id, r.envelope),
         ...(Number(fund.value()) > 0 ? act.fundTba(brain, fund.value()) : []),
         ...act.authoriseGuard(brain),
+        ...(Number(fee.value()) > 0 ? act.setRuntimeFee(id, fee.value()) : []),
         ...(enclave ? act.enrol(id) : []),
       ];
       const ok = await act.runSteps("Start the brain", steps, { summary: el("p", {}, enclave ? "Four signatures: the jar goes on-chain, the wallet is funded, the guard is authorised, the enclave is enrolled. Then it trades by itself." : "No enclave executor is configured for this chain, so this publishes, funds and authorises; enrol later from My Desk.") });
@@ -239,6 +249,8 @@ function step5(root) {
             ? el("p", { class: "muted" }, "A new brain serves an internship on its own wallet before the vault opens. This does everything in one go: publishes the sealed jar on-chain (ciphertext only the enclave opens), seeds the wallet, authorises the guard to trade it, and enrols the brain with the enclave so it runs at its declared cadence.")
             : el("p", { class: "muted" }, "Authored custody means you hold the key, so you run the brain yourself. This seeds its wallet and authorises the guard; then start the runtime with your key."),
           fund.el,
+          sealed ? fee.el : null,
+          sealed && minFee ? el("p", { class: "muted small" }, `This enclave asks for ${minFee} mUSDC per trade; it pauses brains that pay less.`) : null,
           enclave || !sealed ? null : el("p", { class: "muted small" }, badge("no enclave configured", "bad"), " This chain has no enclave executor in its config; you can still publish, fund and authorise now and enrol later."),
           el("div", { class: "btn-row" },
             el("button", { class: "btn primary", disabled: !id, onclick: sealed ? startSealed : startAuthored }, sealed ? (enclave ? "Publish, fund, authorise, enrol" : "Publish, fund, authorise") : "Fund and authorise"),

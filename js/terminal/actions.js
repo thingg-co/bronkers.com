@@ -150,6 +150,19 @@ export function enrol(id) {
   return [{ label: "Enrol with the enclave (set its key as executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ex] }) }];
 }
 export const unenrol = (id) => [{ label: "Unenrol (clear the executor)", run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setExecutor", args: [BigInt(id), ZERO] }) }];
+export const setRuntimeFee = (id, amountStr) => [{ label: `Set the runtime fee to ${amountStr} mUSDC per trade`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setRuntimeFee", args: [BigInt(id), parseUnits(amountStr || "0", 18)] }) }];
+
+/** Ask the enclave to compose and seal a prompt from a brief (sealed-generated custody). The prompt never leaves the enclave. */
+export async function composeWithEnclave(brief, tweaks) {
+  const url = (state.cfg.enclaveUrl || "").replace(/\/$/, "");
+  if (!url) throw new Error("No enclave endpoint is configured for this chain (Developer tab).");
+  const res = await fetch(`${url}/compose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brief, tweaks: tweaks || {} }) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `enclave returned ${res.status}`);
+  if (!json.commitment || !json.envelope) throw new Error("enclave returned an incomplete answer");
+  return json;
+}
+
 /** Put the sealed jar on-chain (as an event) so the enclave can find it without a file handoff. */
 export function publishEnvelope(id, envelopeObj) {
   const bytes = stringToHex(typeof envelopeObj === "string" ? envelopeObj : JSON.stringify(envelopeObj));

@@ -25,7 +25,7 @@ echo "── deploying protocol ──"
 DEPLOY_OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url $RPC --private-key $OWNER_KEY --broadcast 2>&1)
 addr() { echo "$DEPLOY_OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 USDC=$(addr "mUSDC:"); WETH=$(addr "mWETH:"); WBTC=$(addr "mWBTC:"); ROUTER=$(addr "Router:")
-GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:")
+GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:")
 [ -n "$NFT" ] || { echo "deploy failed:"; echo "$DEPLOY_OUT" | tail -20; exit 1; }
 
 echo "── enclave keygen ──"
@@ -66,6 +66,7 @@ mint_brain "$C1" 1 24 2
 send --private-key $OWNER_KEY $GUARD "setExecutor(uint256,address)" 1 $EXECUTOR_ADDR
 send --private-key $OWNER_KEY $NFT "christen(uint256,string)" 1 "Umbra"
 publish 1 genome.dev1.json
+send --private-key $OWNER_KEY $GUARD "setRuntimeFee(uint256,uint256)" 1 1ether   # Umbra pays its executor 1 mUSDC per trade
 fund_and_authorise_tba 1 1000ether
 tick 1 ./genome.dev1.json --own-book
 VAULT1=$(call $NFT "vaultOf(uint256)(address)" 1)
@@ -99,6 +100,11 @@ G3=$(cd agent && npm run --silent genome -- author \
 C3=$(echo "$G3" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
 mint_brain "$C3" 2 24 0
 
+echo "── runtime registry: approve the farm's self-reported measurement (reviewed, not TEE-attested) ──"
+MEASUREMENT=$(cd agent && ENCLAVE_PRIVATE_KEY="$ENCLAVE_PRIV" EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER npm run --silent farm -- --measure)
+send --private-key $OWNER_KEY $REG "approveMeasurement(bytes32,bool)" "$MEASUREMENT" true
+echo "   approved $MEASUREMENT"
+
 echo "── dev balances ──"
 send --private-key $OWNER_KEY $USDC "mint(address,uint256)" $OWNER_ADDR 100000ether
 send --private-key $EXECUTOR_KEY $USDC "mint(address,uint256)" $EXECUTOR_ADDR 100000ether
@@ -113,24 +119,25 @@ cat <<EOF
     weth: "$WETH",
     wbtc: "$WBTC",
     enclavePublicKey: "$ENCLAVE_PUB",
+    registry: "$REG",
 
 dev wallet (anvil #0, owner of all three brains): $OWNER_KEY
 LP wallet  (anvil #2, holds Umbra shares):        $LP_KEY
 
 the farm (enclave runtime that runs every enrolled brain; #1 and #2 are enrolled and published):
   cd agent && set -a && . ./.dev-enclave.env && set +a && \\
-  RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER \\
-  EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY npm run farm -- --mock-brain
+  RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER REGISTRY_ADDRESS=$REG \\
+  FARM_HTTP_PORT=8787 EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY npm run farm -- --mock-brain
 EOF
 
 # keep js/config.js's anvil block in sync with what was just deployed
-python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" <<'PY'
+python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" <<'PY'
 import re, sys, pathlib
-nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor = sys.argv[1:]
+nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry = sys.argv[1:]
 p = pathlib.Path("js/config.js"); t = p.read_text()
 start = t.index("    31337: {"); end = t.index("    },", start)
 block = t[start:end]
-for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor).items():
+for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry).items():
     block = re.sub(rf'(\s{k}: )"[^"]*"', rf'\g<1>"{v}"', block)
 p.write_text(t[:start] + block + t[end:])
 print("js/config.js anvil block updated")

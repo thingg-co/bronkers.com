@@ -49,7 +49,7 @@ session needs to know that the code doesn't say.
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 49 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 55 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
@@ -77,6 +77,15 @@ session needs to know that the code doesn't say.
   verifying each envelope against its commitment. Authored brains stay
   self-hosted (`npm run loop`). Wizard step 5 = publish + fund + authorise +
   enrol. Whitepaper §3.1 / §6.2 / §9 describe this; keep them in sync.
+- Runtime economics + identity (Runtime.t.sol): `ExecutionGuard.runtimeFeeOf`
+  (owner-set ≤ `maxRuntimeFee`, paid post-trade from the traded book to the
+  executor, skipped if no base left — cannot extract); `RuntimeRegistry`
+  (executor key → self-reported measurement + enclave key; deployer approves;
+  `attested()` = registered + approved — labelled "self-reported, not
+  hardware-attested" everywhere); `TraderNFT.tokenURI` on-chain JSON + jar SVG.
+  The farm self-registers (`agent/src/measure.ts`), serves `/compose` +
+  `/health` on FARM_HTTP_PORT (sealed-generated from the browser), honours
+  FARM_MIN_FEE. `protocol/script/deploy-testnet.sh` for Polygon Amoy.
 
 ## Related, outside this repo
 - Whitepaper artifact (private share link, same content as

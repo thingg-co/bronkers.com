@@ -10,6 +10,7 @@ import {TraderNFT} from "../src/TraderNFT.sol";
 import {ExecutionGuard} from "../src/ExecutionGuard.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockSwapRouter} from "../src/mocks/MockSwapRouter.sol";
+import {RuntimeRegistry} from "../src/RuntimeRegistry.sol";
 import {IVenue} from "../src/interfaces/ITraderNFT.sol";
 
 /// Local/testnet deployment. On Base Sepolia the canonical 6551 registry
@@ -27,8 +28,13 @@ contract Deploy is Script {
         router.setPrice(address(wbtc), address(usdc), 60_000e18);
         router.setPrice(address(usdc), address(wbtc), uint256(1e36) / 60_000e18);
 
-        ERC6551Registry registry = new ERC6551Registry();
+        // On public testnets the canonical 6551 registry already exists:
+        // ERC6551_REGISTRY=0x000000006551c19487814612e58FE06813775758 forge script …
+        address registryAddr = vm.envOr("ERC6551_REGISTRY", address(0));
+        if (registryAddr == address(0)) registryAddr = address(new ERC6551Registry());
+        ERC6551Registry registry = ERC6551Registry(registryAddr);
         ERC6551Account accountImpl = new ERC6551Account();
+        RuntimeRegistry runtimeRegistry = new RuntimeRegistry();
         // demo paper season: one own-book trade required before outside deposits
         ExecutionGuard guard = new ExecutionGuard(0, 1);
         TraderNFT nft = new TraderNFT(
@@ -39,6 +45,7 @@ contract Deploy is Script {
             IVenue(address(router))
         );
         guard.setNFT(address(nft), address(usdc));
+        guard.setMaxRuntimeFee(5e18); // a brain may pay its executor at most 5 mUSDC per trade
 
         // "a couple of markets": exactly two curated pairs (WETH/USDC,
         // WBTC/USDC) on one curated venue — owners cannot add more
@@ -57,5 +64,6 @@ contract Deploy is Script {
         console.log("Account impl: ", address(accountImpl));
         console.log("Guard:        ", address(guard));
         console.log("TraderNFT:    ", address(nft));
+        console.log("RuntimeReg:   ", address(runtimeRegistry));
     }
 }

@@ -1,7 +1,7 @@
 // Read side. Everything the Terminal shows is computed here from public
 // chain state and logs — no indexer. Anyone can recompute these numbers.
 import { formatUnits } from "https://esm.sh/viem@2.21.19";
-import { erc20Abi, guardAbi, nftAbi, vaultAbi } from "./abi.js";
+import { erc20Abi, guardAbi, nftAbi, registryAbi, vaultAbi } from "./abi.js";
 import { state } from "./chain.js";
 
 const WAD = 10n ** 18n;
@@ -235,11 +235,30 @@ export async function loadBrain(id, { force } = {}) {
       return { token: t, sym, vaultBal, tbaBal };
     }),
   );
-  const [feeSharesValue, trades, envelopeLogs] = await Promise.all([
+  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI] = await Promise.all([
     read(b.vault, vaultAbi, "convertToAssets", [feeShares]),
     loadTrades(id, b.genome.birthBlock),
     state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "EnvelopePublished", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
+    read(guard, guardAbi, "runtimeFeeOf", [BigInt(id)]).catch(() => 0n),
+    read(guard, guardAbi, "maxRuntimeFee").catch(() => 0n),
+    read(state.cfg.traderNFT, nftAbi, "tokenURI", [BigInt(id)]).catch(() => ""),
   ]);
+  const runtime = runtimeStatus(policy[0], Number(policy[4]), b);
+  if (state.cfg.registry && runtime.kind !== "none") {
+    try {
+      const [[measurement, enclavePublicKey, registeredAt], attested] = await Promise.all([
+        read(state.cfg.registry, registryAbi, "runtimeOf", [policy[0]]),
+        read(state.cfg.registry, registryAbi, "attested", [policy[0]]),
+      ]);
+      runtime.registered = Number(registeredAt) > 0;
+      runtime.measurement = measurement;
+      runtime.attested = Boolean(attested);
+    } catch {}
+  }
+  let token = null;
+  if (tokenURI && tokenURI.startsWith("data:application/json;base64,")) {
+    try { token = JSON.parse(atob(tokenURI.split(",")[1])); } catch {}
+  }
   const series = await navSeries(b, trades);
   const brain = {
     ...b,
@@ -258,7 +277,10 @@ export async function loadBrain(id, { force } = {}) {
     vaultUsdc,
     tbaAuthorised: tbaAllowance > 0n,
     envelopePublished: envelopeLogs.length > 0,
-    runtime: runtimeStatus(policy[0], Number(policy[4]), b),
+    runtime,
+    runtimeFee,
+    maxRuntimeFee,
+    token,
     my: { shares: b.myShares, assets: myAssets, usdc: myUsdc, allowance: myAllowance },
     trades,
     series,
@@ -275,7 +297,7 @@ export function runtimeStatus(executor, lastTradeAt, b) {
   const kind = !executor || executor === zero ? "none" : enclave && executor.toLowerCase() === enclave ? "enclave" : "self";
   const intervalSec = Math.max(60, Math.floor(86400 / Math.max(1, Number(b.genome.cadence))));
   const nextDue = lastTradeAt ? lastTradeAt + intervalSec : null;
-  return { kind, lastTradeAt, nextDue, intervalSec };
+  return { kind, lastTradeAt, nextDue, intervalSec, registered: false, attested: false, measurement: null };
 }
 
 /** Static fallback when no chain is reachable: data/traders.json from report.ts. */
