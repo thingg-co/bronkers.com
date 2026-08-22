@@ -1,6 +1,7 @@
 # BROKNERS — project conventions and state
 
-Read README.md first for layout and run commands. This file is what a fresh
+Read README.md first for layout and run commands, docs/quickstart.md for the
+end-to-end dev loop, and TODO.md for what is left. This file is what a fresh
 session needs to know that the code doesn't say.
 
 ## Naming
@@ -135,37 +136,33 @@ session needs to know that the code doesn't say.
   (keep whitepaper.md in sync); docs/architecture.html client-renders
   architecture.md via marked+mermaid CDN — the .md is the single source there.
 
-## v2 backlog (agreed direction, not started)
-- TWAP/oracle NAV pricing + fee-crystallization delay (spot quote is
-  manipulable — biggest known protocol weakness).
-- Vault auto-unwind / in-kind redemption so LP withdrawals never block on
-  base-asset liquidity.
-- Executor auto-reset on NFT transfer; timelocked executor change as LP
-  notice.
-- Daily notional budget on top of the per-trade cap.
-- Buyback/AMM floor pool (base-asset denominated — NO native token, no
-  burns, no stock distributions; deliberately rejected from StonkBrokers).
-- Terminal leaderboard page ("The Floor") fed by report.ts.
-- Real TEE for the enclave: **no AWS**; the contract half (verifier adapter,
-  attested registration, labels) and the farm half (lease loop, gateway brain,
-  quote registration path) are built; what remains is operational: build the
-  farm image, `oyster-cvm deploy` it on an Intel TDX operator (Marlin Oyster
-  CVM first, Phala Cloud as dev/fallback), have it request a TDX quote with
-  the report data the farm prints, register it, reproduce and approve the
-  measurement, and fund a USDC-paid TEE inference gateway account. The farm
-  pays its own lease from runtime fees (docs/runtime-hosting.md). Lit Protocol
-  for authored-custody handoff.
-- Realized-only performance fees.
-- First live venue is **Polymarket** (Polygon; CTF Exchange, USDC collateral,
-  binary outcome tokens) via a thin IVenue adapter — decided Aug 2026, replaces
-  the earlier Uniswap-on-Base-Sepolia plan. Testnet pilot on Polygon Amoy
-  against a mock conditional-token exchange; canonical 6551 registry
+## Backlog and the decisions behind it
+The item list lives in TODO.md (checkboxes; tick them there). The decisions
+that constrain it, which are not up for re-litigation in a session:
+- **Real TEE for the enclave: no AWS.** Intel TDX on a provider a bare EVM
+  key can rent and extend in USDC: Marlin Oyster CVM first, Phala Cloud as
+  dev/fallback; model calls via a USDC-paid TEE inference gateway; quotes
+  verified through Automata DCAP into RuntimeRegistry; the farm pays its own
+  lease from runtime fees. The contract half (verifier adapter, attested
+  registration, labels) and the farm half (lease loop, gateway brain, quote
+  registration path) are built; what remains is operational
+  (docs/runtime-hosting.md has the runbook). Lit Protocol for authored-custody
+  handoff.
+- **First live venue is Polymarket** (Polygon; CTF Exchange, USDC collateral,
+  binary outcome tokens) via a thin IVenue adapter — decided Aug 2026,
+  replaces the earlier Uniswap-on-Base-Sepolia plan. Testnet pilot on Polygon
+  Amoy against a mock conditional-token exchange; canonical 6551 registry
   0x000000006551c19487814612e58FE06813775758. Open integration question: the
   TBA must be the off-chain order signer and must refuse anything the guard
-  would reject (signing policy in the enclave + approvals to the exchange only).
-  The protocol tests still use the two mock spot markets; that is fine for the
-  invariants but the paper now describes Polymarket as the target.
-- The whitepaper (docs/whitepaper.*) is design/theory only — legal and
+  would reject (signing policy in the enclave + approvals to the exchange
+  only). The protocol tests still use the two mock spot markets; that is fine
+  for the invariants but the paper describes Polymarket as the target.
+- **Buyback/AMM floor pool, if ever, is base-asset denominated**: NO native
+  token, no burns, no stock distributions (deliberately rejected from
+  StonkBrokers).
+- **TWAP/oracle NAV pricing + fee-crystallization delay** is the biggest known
+  protocol weakness (spot quote is manipulable) and the first protocol item.
+- **The whitepaper (docs/whitepaper.*) is design/theory only** — legal and
   regulatory discussion was removed at the owner's request (Aug 2026). The
   testnet-only gate above is still an operating rule; it just isn't argued in
   the paper.

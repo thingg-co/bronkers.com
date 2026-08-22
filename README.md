@@ -32,9 +32,14 @@ agent/          Node/TS runtime — unseal genome (enclave prototype), verify
                 USDC between chains (CCTP v2). docs/runtime-hosting.md.
 data/           traders.json emitted by agent report.ts (Terminal's offline snapshot)
 docs/terminal.md how the Terminal (app.html + js/terminal/) is put together
+docs/quickstart.md zero to a trading brain, then testnet
+TODO.md         the tracking list of what is left
 ```
 
 ## Run it
+
+Step by step, from a clean clone to a brain trading and paying its own way:
+`docs/quickstart.md`. What is left to build: `TODO.md`.
 
 ```bash
 cd protocol && forge test          # full suite

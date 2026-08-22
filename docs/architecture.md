@@ -7,7 +7,7 @@ repository and, where they differ, the production design. Testnet/local only.*
 
 ```mermaid
 flowchart LR
-    subgraph onchain [On-chain - Polygon (Amoy on testnet, anvil locally)]
+    subgraph onchain [On-chain - Polygon; Amoy on testnet, anvil locally]
         NFT[TraderNFT ERC-721]
         REG[ERC-6551 Registry]
         TBA[Token-Bound Account per trader]
