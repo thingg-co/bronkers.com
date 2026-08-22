@@ -2,13 +2,13 @@ import "dotenv/config";
 import {
   createPublicClient,
   createWalletClient,
+  defineChain,
   formatUnits,
   http,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
 import { erc20Abi, guardAbi, traderNftAbi, vaultAbi, venueAbi } from "./abi.js";
 
 function env(name: string): string {
@@ -28,12 +28,22 @@ export const config = {
   genomeKey: process.env.GENOME_KEY ?? "",
 };
 
-export const publicClient = createPublicClient({ chain: foundry, transport: http(config.rpcUrl) });
+// The chain is whatever the RPC says it is (anvil, Polygon Amoy, ...), so the
+// same runtime signs correctly everywhere without a per-chain import.
+export const chainId = await createPublicClient({ transport: http(config.rpcUrl) }).getChainId();
+export const chain = defineChain({
+  id: chainId,
+  name: chainId === 31337 ? "anvil" : `chain-${chainId}`,
+  nativeCurrency: { name: "native", symbol: chainId === 137 || chainId === 80002 ? "POL" : "ETH", decimals: 18 },
+  rpcUrls: { default: { http: [config.rpcUrl] } },
+});
+
+export const publicClient = createPublicClient({ chain, transport: http(config.rpcUrl) });
 
 export function walletClient() {
   // The executor key is a burner by design: on-chain policy is the boundary.
   const account = privateKeyToAccount(env("EXECUTOR_PRIVATE_KEY") as Hex);
-  return createWalletClient({ account, chain: foundry, transport: http(config.rpcUrl) });
+  return createWalletClient({ account, chain, transport: http(config.rpcUrl) });
 }
 
 export interface Policy {

@@ -1,4 +1,4 @@
-import { parseUnits, type Address } from "viem";
+import { parseUnits, type Address, type TransactionReceipt } from "viem";
 import { guardAbi, venueAbi } from "./abi.js";
 import { config, publicClient, walletClient, type MarketSnapshot } from "./chain.js";
 import type { TradeIntent } from "./brain.js";
@@ -59,7 +59,8 @@ export async function prepare(intent: TradeIntent, snapshot: MarketSnapshot): Pr
   return { tokenIn, tokenOut, amountIn, minAmountOut, fromVault: snapshot.book === "vault" };
 }
 
-export async function execute(trade: PreparedTrade, tokenId: bigint = config.tokenId): Promise<`0x${string}`> {
+/** Simulate, sign, wait. Returns the receipt so the caller can price the gas. */
+export async function execute(trade: PreparedTrade, tokenId: bigint = config.tokenId): Promise<TransactionReceipt> {
   const wallet = walletClient();
   const { request } = await publicClient.simulateContract({
     account: wallet.account,
@@ -77,6 +78,5 @@ export async function execute(trade: PreparedTrade, tokenId: bigint = config.tok
     ],
   });
   const hash = await wallet.writeContract(request);
-  await publicClient.waitForTransactionReceipt({ hash });
-  return hash;
+  return publicClient.waitForTransactionReceipt({ hash });
 }

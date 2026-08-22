@@ -12,11 +12,55 @@ export const TradeIntent = z.object({
 });
 export type TradeIntent = z.infer<typeof TradeIntent>;
 
-export interface Brain {
-  decide(snapshot: MarketSnapshot): Promise<TradeIntent>;
+/** What one model call consumed, so the farm can price the tick. */
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  backend: "anthropic" | "gateway" | "mock";
 }
 
-/** The real brain: the decrypted genome is the system prompt. */
+export interface Decision {
+  intent: TradeIntent;
+  usage: Usage | null;
+}
+
+export interface Brain {
+  decide(snapshot: MarketSnapshot): Promise<Decision>;
+}
+
+const TOOL_NAME = "submit_trade_intent";
+const TOOL_DESCRIPTION = "Submit your trading decision";
+const TOOL_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    action: { type: "string", enum: ["swap", "hold"] },
+    tokenIn: { type: "string", description: "address of token to sell (omit for hold)" },
+    tokenOut: { type: "string", description: "address of token to buy (omit for hold)" },
+    amountIn: { type: "string", description: "amount to sell, decimal whole-token units" },
+    rationale: { type: "string" },
+  },
+  required: ["action", "rationale"],
+};
+
+function systemPrompt(genome: Genome): string {
+  return (
+    `${genome.prompt}\n\n` +
+    `Tweaks: ${JSON.stringify(genome.tweaks)}\n` +
+    `You manage an on-chain vault. You MUST respond by calling ${TOOL_NAME}. ` +
+    `All trades are policy-checked on-chain; propose amounts within policy.`
+  );
+}
+
+function userPrompt(snapshot: MarketSnapshot): string {
+  const tokens = [
+    `${snapshot.baseSymbol}: ${snapshot.base}`,
+    ...snapshot.holdings.map((h) => `${h.symbol}: ${h.token}`),
+  ].join("\n");
+  return `Market snapshot:\n${describeSnapshot(snapshot)}\n\nToken addresses:\n${tokens}\n\nDecide your next action.`;
+}
+
+/** The real brain against Anthropic's API: the decrypted genome is the system prompt. */
 export class ClaudeBrain implements Brain {
   private client = new Anthropic();
   constructor(
@@ -24,63 +68,105 @@ export class ClaudeBrain implements Brain {
     private model: string,
   ) {}
 
-  async decide(snapshot: MarketSnapshot): Promise<TradeIntent> {
-    const tokens = [
-      `${snapshot.baseSymbol}: ${snapshot.base}`,
-      ...snapshot.holdings.map((h) => `${h.symbol}: ${h.token}`),
-    ].join("\n");
+  async decide(snapshot: MarketSnapshot): Promise<Decision> {
     const res = await this.client.messages.create({
       model: this.model,
       max_tokens: 1024,
-      system:
-        `${this.genome.prompt}\n\n` +
-        `Tweaks: ${JSON.stringify(this.genome.tweaks)}\n` +
-        `You manage an on-chain vault. You MUST respond by calling submit_trade_intent. ` +
-        `All trades are policy-checked on-chain; propose amounts within policy.`,
-      messages: [
-        {
-          role: "user",
-          content: `Market snapshot:\n${describeSnapshot(snapshot)}\n\nToken addresses:\n${tokens}\n\nDecide your next action.`,
-        },
-      ],
-      tools: [
-        {
-          name: "submit_trade_intent",
-          description: "Submit your trading decision",
-          input_schema: {
-            type: "object" as const,
-            properties: {
-              action: { type: "string", enum: ["swap", "hold"] },
-              tokenIn: { type: "string", description: "address of token to sell (omit for hold)" },
-              tokenOut: { type: "string", description: "address of token to buy (omit for hold)" },
-              amountIn: { type: "string", description: "amount to sell, decimal whole-token units" },
-              rationale: { type: "string" },
-            },
-            required: ["action", "rationale"],
-          },
-        },
-      ],
-      tool_choice: { type: "tool", name: "submit_trade_intent" },
+      system: systemPrompt(this.genome),
+      messages: [{ role: "user", content: userPrompt(snapshot) }],
+      tools: [{ name: TOOL_NAME, description: TOOL_DESCRIPTION, input_schema: TOOL_SCHEMA }],
+      tool_choice: { type: "tool", name: TOOL_NAME },
     });
     const toolUse = res.content.find((c) => c.type === "tool_use");
     if (!toolUse || toolUse.type !== "tool_use") throw new Error("Brain returned no trade intent");
-    return TradeIntent.parse(toolUse.input);
+    return {
+      intent: TradeIntent.parse(toolUse.input),
+      usage: { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens, model: res.model ?? this.model, backend: "anthropic" },
+    };
+  }
+}
+
+/**
+ * The same brain over an OpenAI-compatible chat-completions gateway, which is
+ * what the TEE inference providers expose (Phala/RedPill, SecretAI): the model
+ * runs in a GPU enclave and the balance is paid in USDC, so no card sits
+ * between a brain's capital and its inference. Env: INFERENCE_BASE_URL
+ * (…/v1), INFERENCE_API_KEY. The on-chain model trait names the model.
+ */
+export class GatewayBrain implements Brain {
+  constructor(
+    private genome: Genome,
+    private model: string,
+    private baseUrl = (process.env.INFERENCE_BASE_URL ?? "").replace(/\/$/, ""),
+    private apiKey = process.env.INFERENCE_API_KEY ?? "",
+  ) {
+    if (!this.baseUrl) throw new Error("GatewayBrain needs INFERENCE_BASE_URL");
+  }
+
+  async decide(snapshot: MarketSnapshot): Promise<Decision> {
+    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}) },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 1024,
+        messages: [
+          { role: "system", content: systemPrompt(this.genome) },
+          { role: "user", content: userPrompt(snapshot) },
+        ],
+        tools: [{ type: "function", function: { name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: TOOL_SCHEMA } }],
+        tool_choice: { type: "function", function: { name: TOOL_NAME } },
+      }),
+    });
+    if (!res.ok) throw new Error(`inference gateway ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const json = (await res.json()) as {
+      model?: string;
+      choices?: { message?: { tool_calls?: { function?: { name?: string; arguments?: string } }[] } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    const call = json.choices?.[0]?.message?.tool_calls?.find((c) => c.function?.name === TOOL_NAME) ?? json.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call?.function?.arguments) throw new Error("Brain returned no trade intent");
+    return {
+      intent: TradeIntent.parse(JSON.parse(call.function.arguments)),
+      usage: {
+        inputTokens: json.usage?.prompt_tokens ?? 0,
+        outputTokens: json.usage?.completion_tokens ?? 0,
+        model: json.model ?? this.model,
+        backend: "gateway",
+      },
+    };
   }
 }
 
 /** Deterministic brain for demos and CI: buys a small clip of the first universe token. */
 export class MockBrain implements Brain {
-  async decide(snapshot: MarketSnapshot): Promise<TradeIntent> {
+  async decide(snapshot: MarketSnapshot): Promise<Decision> {
     const target = snapshot.holdings[0];
-    if (!target) return { action: "hold", rationale: "no universe tokens configured" };
+    if (!target) return { intent: { action: "hold", rationale: "no universe tokens configured" }, usage: null };
     // 5% of NAV, well inside the default 20% notional cap
     const amountBase = (snapshot.navBase * 5n) / 100n;
     return {
-      action: "swap",
-      tokenIn: snapshot.base,
-      tokenOut: target.token,
-      amountIn: (Number(amountBase) / 1e18).toString(),
-      rationale: "MockBrain: rotate 5% of NAV into the first universe asset (demo).",
+      intent: {
+        action: "swap",
+        tokenIn: snapshot.base,
+        tokenOut: target.token,
+        amountIn: (Number(amountBase) / 1e18).toString(),
+        rationale: "MockBrain: rotate 5% of NAV into the first universe asset (demo).",
+      },
+      usage: null,
     };
   }
+}
+
+/** Backend selection: --mock-brain, else a TEE gateway if INFERENCE_BASE_URL is set, else Anthropic. */
+export function createBrain(opts: { genome: Genome; model: string; mock?: boolean }): Brain {
+  if (opts.mock) return new MockBrain();
+  if (process.env.INFERENCE_BASE_URL) return new GatewayBrain(opts.genome, opts.model);
+  return new ClaudeBrain(opts.genome, opts.model);
+}
+
+export function describeBackend(mock?: boolean): string {
+  if (mock) return "mock brain";
+  if (process.env.INFERENCE_BASE_URL) return `inference gateway ${process.env.INFERENCE_BASE_URL}`;
+  return "Anthropic API";
 }

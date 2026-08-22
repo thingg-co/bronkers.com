@@ -49,11 +49,13 @@ for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
     publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "nameOf", args: [tokenId] }),
     publicClient.readContract({ address: guard, abi: extraGuardAbi, functionName: "tierOf", args: [tokenId] }),
   ]);
-  const [nav, pps, seasoned, logs] = await Promise.all([
+  const [nav, pps, seasoned, logs, feeLogs, runtimeFee] = await Promise.all([
     publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "totalAssets" }),
     publicClient.readContract({ address: vault, abi: extraVaultAbi, functionName: "convertToAssets", args: [WAD] }),
     publicClient.readContract({ address: guard, abi: guardAbi, functionName: "seasoned", args: [tokenId] }),
     publicClient.getContractEvents({ address: guard, abi: guardAbi, eventName: "TradeExecuted", args: { tokenId }, fromBlock: 0n }),
+    publicClient.getContractEvents({ address: guard, abi: guardAbi, eventName: "RuntimeFeePaid", args: { tokenId }, fromBlock: 0n }),
+    publicClient.readContract({ address: guard, abi: guardAbi, functionName: "runtimeFeeOf", args: [tokenId] }),
   ]);
   const trades = [];
   for (const t of logs) {
@@ -86,6 +88,10 @@ for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
     nav: formatUnits(nav, 18),
     pps: formatUnits(pps, 18),
     tradeCount: trades.length,
+    // the runtime fee is a fund expense and belongs in the record like any other
+    runtimeFee: formatUnits(runtimeFee, 18),
+    runtimeFeesPaid: formatUnits(feeLogs.reduce((s, l) => s + (l.args.fee ?? 0n), 0n), 18),
+    runtimeFeePayments: feeLogs.length,
     trades,
   });
 }

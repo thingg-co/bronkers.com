@@ -1,6 +1,6 @@
 import { formatUnits } from "viem";
 import { traderNftAbi } from "./abi.js";
-import { ClaudeBrain, MockBrain, type Brain } from "./brain.js";
+import { createBrain, describeBackend, type Brain } from "./brain.js";
 import { config, publicClient, snapshot, type Book } from "./chain.js";
 import { commit, openSecretStore, type Genome } from "./genome.js";
 import { execute, prepare } from "./executor.js";
@@ -47,8 +47,8 @@ async function loadVerifiedGenome(): Promise<{ genome: Genome; model: string; ca
 
 async function tick(brain: Brain): Promise<void> {
   const snap = await snapshot(book);
-  const intent = await brain.decide(snap);
-  console.log(`intent: ${intent.action} — ${intent.rationale}`);
+  const { intent, usage } = await brain.decide(snap);
+  console.log(`intent: ${intent.action} — ${intent.rationale}${usage ? ` · ${usage.inputTokens}+${usage.outputTokens} tokens (${usage.model})` : ""}`);
   const trade = await prepare(intent, snap);
   if (!trade) return;
   console.log(
@@ -58,12 +58,13 @@ async function tick(brain: Brain): Promise<void> {
     console.log("dry-run: not submitting");
     return;
   }
-  const hash = await execute(trade);
-  console.log(`executed within guardrails: ${hash}`);
+  const receipt = await execute(trade);
+  console.log(`executed within guardrails: ${receipt.transactionHash} (gas ${formatUnits(receipt.gasUsed * receipt.effectiveGasPrice, 18)})`);
 }
 
 const { genome, model, cadence } = await loadVerifiedGenome();
-const brain: Brain = useMock ? new MockBrain() : new ClaudeBrain(genome, model);
+const brain: Brain = createBrain({ genome, model, mock: useMock });
+console.log(`brain: ${describeBackend(useMock)} · model ${model}`);
 const intervalMs = Math.max(60_000, Math.floor((24 * 3_600_000) / Math.max(1, cadence)));
 
 do {

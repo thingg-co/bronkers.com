@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Off-chain runtime for a Brokner: decrypt genome -> Claude -> guarded on-chain execution",
+  "description": "Off-chain runtime for a Brokner: unseal genome -> model -> guarded on-chain execution; the farm runs every enrolled brain and pays its own lease",
   "scripts": {
     "genome": "tsx src/tools/make-genome.ts",
     "loop": "tsx src/index.ts",
     "farm": "tsx src/farm.ts",
     "report": "tsx src/report.ts",
+    "bridge": "tsx src/bridge.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
