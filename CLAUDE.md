@@ -7,9 +7,11 @@ session needs to know that the code doesn't say.
 - Everything is **Brokners** ("like brokers, but misspelled") — site, docs,
   contracts, on-chain collection name ("Brokners"/"BRKNR", vault shares
   "Brokner Vault #N"/"bknrN"). Never introduce a second product name.
-- No "Darkly Fund" or "thingg" references anywhere in the repo (scrubbed
-  Aug 2026 at the owner's request). Brokners stands alone; the git remote
-  org name is the one thing we cannot change from here.
+- Brokners stands alone. No references to any parent fund, studio, or
+  holding company anywhere in the repo: not in copy, footers, licences,
+  package names, identifiers, protocol constants, or comments (scrubbed Aug
+  2026 at the owner's request). The git remote's org name is the one thing
+  we cannot change from here.
 
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the
