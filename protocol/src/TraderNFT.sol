@@ -32,7 +32,7 @@ contract TraderNFT is ERC721, ITraderNFT {
         bytes32 commitment; // keccak256 of canonical genome JSON — never changes
         uint64 birthBlock;
         uint8 riskProfile; // 0 conservative / 1 balanced / 2 aggressive
-        uint8 cadence; // declared max trades per day (informational trait)
+        uint8 cadence; // declared max trades per day (>= 1; the guard enforces it as a minimum interval)
         uint8 custody; // see CUSTODY_* constants
         string model; // pinned model identifier
         string encryptedPromptCID; // pointer to the encrypted genome blob

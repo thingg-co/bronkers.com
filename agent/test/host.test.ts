@@ -37,7 +37,7 @@ test("hostFromEnv: none by default, market and oyster need their ids, unknown ki
 
   assert.throws(() => hostFromEnv({ FARM_HOST: "market" }, defaults), /FARM_HOST_MARKET and FARM_HOST_JOB_ID/);
   assert.throws(() => hostFromEnv({ FARM_HOST: "oyster" }, defaults), /OYSTER_JOB_ID/);
-  assert.throws(() => hostFromEnv({ FARM_HOST: "aws" }, defaults), /unknown FARM_HOST/);
+  assert.throws(() => hostFromEnv({ FARM_HOST: "cloud" }, defaults), /unknown FARM_HOST/);
 
   const market = hostFromEnv({ FARM_HOST: "market", FARM_HOST_MARKET: "0x" + "11".repeat(20), FARM_HOST_JOB_ID: "0x" + "22".repeat(32) }, defaults);
   assert.equal(market.kind, "market");
