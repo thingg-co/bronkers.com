@@ -35,7 +35,8 @@ import { measureRuntime } from "./measure.js";
  *
  * Flags: --once (tick every due brain once, then exit), --mock-brain,
  *        --dry-run, --measure (print the runtime measurement and exit).
- * Env: FARM_POLL_SECONDS (default 30), FARM_MIN_FEE, FARM_HTTP_PORT, REGISTRY_ADDRESS.
+ * Env: FARM_POLL_SECONDS (default 30), FARM_MIN_FEE, FARM_HTTP_PORT, REGISTRY_ADDRESS,
+ *      FARM_TURBO=1 (dev: ignore cadence, tick every poll).
  */
 const args = new Set(process.argv.slice(2));
 const once = args.has("--once");
@@ -44,6 +45,9 @@ const useMock = args.has("--mock-brain");
 const pollMs = Math.max(5, Number(process.env.FARM_POLL_SECONDS ?? 30)) * 1000;
 const minFee = parseUnits(process.env.FARM_MIN_FEE ?? "0", 18);
 const httpPort = Number(process.env.FARM_HTTP_PORT ?? 0);
+// FARM_TURBO=1 (dev only): ignore each brain's declared cadence and tick every poll.
+// Production honours the cadence trait; it is a public promise.
+const turbo = process.env.FARM_TURBO === "1";
 
 const measurement = measureRuntime();
 if (args.has("--measure")) {
@@ -57,6 +61,7 @@ const enclavePub = enclavePublicKeyOf(enclaveKey);
 const me = privateKeyToAccount(process.env.EXECUTOR_PRIVATE_KEY as Hex).address;
 console.log(`farm up · executor ${me} · nft ${config.nft} · poll ${pollMs / 1000}s${useMock ? " · mock brain" : ""}`);
 console.log(`runtime measurement ${measurement}`);
+if (turbo) console.log("FARM_TURBO=1: ignoring declared cadence, ticking every poll (dev only)");
 
 interface Running {
   tokenId: bigint;
@@ -211,7 +216,7 @@ async function round(): Promise<void> {
   await enrol();
   const now = Date.now();
   for (const r of running.values()) {
-    if (now - r.lastTickAt < r.intervalMs && !once) continue;
+    if (now - r.lastTickAt < r.intervalMs && !once && !turbo) continue;
     r.lastTickAt = now;
     try {
       await tick(r);

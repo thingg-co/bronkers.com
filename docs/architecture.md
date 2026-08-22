@@ -210,7 +210,8 @@ every run: unseal/decrypt ─▶ recompute hash ─▶ MUST equal on-chain commi
   `SealedSecretStore` / `LocalSecretStore` behind one `SecretStore` interface.
 - **The prototype's trust gap, stated plainly**: the "enclave" is the agent process
   and its private key is an env var — the operator can read sealed genomes. Production
-  moves the keypair and the model call into a hardware TEE (e.g. AWS Nitro) whose
+  moves the keypair and the model call into a hardware TEE (Intel TDX on a machine
+  rented in the base asset; docs/runtime-hosting.md) whose
   attestation proves the runtime never exposes plaintext.
 - Authored mode retains the disclosed limitation: past owners who decrypted keep the
   plaintext; sale transfers future exclusivity, not amnesia. That is exactly why the
@@ -252,7 +253,8 @@ resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted vi
 `FARM_POLL_SECONDS`, `FARM_MIN_FEE` (refuse brains paying less), `FARM_HTTP_PORT` (the
 enclave endpoint: `GET /health`, `POST /compose {brief, tweaks}` → `{commitment,
 envelope}` for sealed-generated brains; the prompt never leaves the process),
-`REGISTRY_ADDRESS` (self-register the runtime measurement at start).
+`REGISTRY_ADDRESS` (self-register the runtime measurement at start), `FARM_TURBO=1` (dev:
+ignore declared cadence and tick every poll).
 
 ## 4b. The Terminal
 

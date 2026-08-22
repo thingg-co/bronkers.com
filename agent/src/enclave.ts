@@ -13,7 +13,8 @@ import {
  * Sealed-genome custody (prototype of the enclave model).
  *
  * A genome sealed to the enclave public key can only be opened by the holder
- * of the enclave private key — in production a TEE (e.g. AWS Nitro) whose key
+ * of the enclave private key — in production a TEE (Intel TDX on a rented
+ * machine; see docs/runtime-hosting.md) whose key
  * never leaves the enclave and whose attestation proves the runtime never
  * exposes plaintext. In this prototype the "enclave" is the agent process and
  * the key sits in an env var: the cryptography is real, the hardware isolation

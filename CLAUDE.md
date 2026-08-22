@@ -105,7 +105,12 @@ session needs to know that the code doesn't say.
 - Buyback/AMM floor pool (base-asset denominated — NO native token, no
   burns, no stock distributions; deliberately rejected from StonkBrokers).
 - Terminal leaderboard page ("The Floor") fed by report.ts.
-- Real TEE (AWS Nitro) for the enclave; Lit Protocol for authored-custody
+- Real TEE for the enclave: **no AWS**; Intel TDX on a provider a bare EVM
+  key can rent and extend in USDC (Marlin Oyster CVM first, Phala Cloud as
+  dev/fallback), model calls via a USDC-paid TEE inference gateway, quotes
+  verified through Automata DCAP into RuntimeRegistry; the farm pays its own
+  lease from runtime fees (docs/runtime-hosting.md). Lit Protocol for
+  authored-custody
   handoff.
 - Proof of Brain: attestation registry binding executor keys to reproducible
   runtime measurements, so "AI-traded" is verifiable, not claimed.

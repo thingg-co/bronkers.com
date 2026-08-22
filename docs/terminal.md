@@ -137,6 +137,12 @@ The seed prints the dev keys. Paste one in the Developer tab (or open
 `/app?devkey=…`) to act as the owner or the LP. `protocol/script/demo.sh` is
 still the one-shot end-to-end demo; `seed-dev.sh` leaves the chain up.
 
+## Hosting
+
+`docs/runtime-hosting.md` is the research and decision on where the farm runs
+and who pays: no AWS; Intel TDX rented and extended in USDC by the farm's own
+key, inference via a USDC-paid TEE gateway, attestation via Automata DCAP.
+
 ## Tooltips
 
 Every input carries a short explanation: a ⓘ next to the label (keyboard
@@ -152,7 +158,8 @@ it changes, and what it cannot change.
   and the TBA-as-order-signer; it also needs venue-per-brain at mint (today
   every brain uses the NFT's default venue).
 - Hardware attestation: the registry, labels and farm self-measurement are in
-  place; a TEE (AWS Nitro) adds the signature over the same fields.
+  place; a TDX host (no AWS; see docs/runtime-hosting.md) adds the quote, verified
+  on-chain through Automata DCAP, over the same fields.
 - Public testnet: `protocol/script/deploy-testnet.sh` deploys to Polygon Amoy
   with a funded key and prints the `config.js` block; then run the farm and
   fill `enclavePublicKey` / `enclaveExecutor` / `enclaveUrl` from `/health`.

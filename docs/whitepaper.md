@@ -239,7 +239,8 @@ that the strategy was in control. We believe the only satisfactory answer is att
 execution, and the design anticipates it in three parts.
 
 First, the complete runtime (sealed genome, model invocation, and executor key) runs
-inside a trusted execution environment such as AWS Nitro. The enclave's remote
+inside a trusted execution environment, in our design an Intel TDX machine rented
+from a compute marketplace and paid for in the base asset by the enclave itself. The enclave's remote
 attestation binds together the runtime image (a reproducible-build measurement), the
 executor public key (generated inside the enclave and never exported), and the genome
 commitment being served. If the only party able to sign `executeTrade` is code whose
