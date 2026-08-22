@@ -1,5 +1,5 @@
 {
-  "generatedAtBlock": 71,
+  "generatedAtBlock": 74,
   "traders": [
     {
       "tokenId": 1,
@@ -7,21 +7,24 @@
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "account": "0xDeBC89087c0E4a0F1305038e0E58d2757C383775",
       "vault": "0x1F708C24a0D3A740cD47cC0444E9480899f3dA7D",
-      "commitment": "0x923e1a8dedb614a69129a21d0693c246abe93b0ffe2b950a346b88b1ca1f2f12",
+      "commitment": "0xdd409df2cefd800257bea254d7a5356344b7e6e60feaf57604ab98db42c95e7b",
       "birthBlock": 6,
       "model": "claude-sonnet-5",
       "riskProfile": 1,
       "cadence": 24,
       "custody": "sealed-generated",
-      "tier": 1,
+      "tier": 0,
       "seasoned": true,
-      "nav": "11088.817175532389856545",
-      "pps": "1.093286719587744886",
-      "tradeCount": 6,
+      "nav": "11590.8207319261347075",
+      "pps": "1.15908207319261347",
+      "tradeCount": 13,
+      "runtimeFee": "1",
+      "runtimeFeesPaid": "13",
+      "runtimeFeePayments": 13,
       "trades": [
         {
           "block": 13,
-          "ts": 1787395185,
+          "ts": 1787401952,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -31,8 +34,8 @@
           "fromVault": false
         },
         {
-          "block": 19,
-          "ts": 1787395186,
+          "block": 20,
+          "ts": 1787405553,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -42,8 +45,8 @@
           "fromVault": true
         },
         {
-          "block": 21,
-          "ts": 1787395187,
+          "block": 23,
+          "ts": 1787409153,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -53,8 +56,8 @@
           "fromVault": true
         },
         {
-          "block": 23,
-          "ts": 1787395187,
+          "block": 26,
+          "ts": 1787412754,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -64,8 +67,8 @@
           "fromVault": true
         },
         {
-          "block": 25,
-          "ts": 1787395188,
+          "block": 29,
+          "ts": 1787416354,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -75,14 +78,91 @@
           "fromVault": true
         },
         {
-          "block": 68,
-          "ts": 1787395205,
+          "block": 47,
+          "ts": 1787438231,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
           "outSym": "mWETH",
-          "amountIn": "542.6210238792606",
-          "amountOut": "0.2713105119396303",
+          "amountIn": "525.0939603320312",
+          "amountOut": "0.2625469801660156",
+          "fromVault": true
+        },
+        {
+          "block": 50,
+          "ts": 1787459841,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "531.6076348361817",
+          "amountOut": "0.26580381741809085",
+          "fromVault": true
+        },
+        {
+          "block": 53,
+          "ts": 1787481461,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "538.2027302716339",
+          "amountOut": "0.26910136513581695",
+          "fromVault": true
+        },
+        {
+          "block": 58,
+          "ts": 1787503111,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "544.8802644000293",
+          "amountOut": "0.27244013220001465",
+          "fromVault": true
+        },
+        {
+          "block": 62,
+          "ts": 1787524731,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "551.6412677050297",
+          "amountOut": "0.27582063385251485",
+          "fromVault": true
+        },
+        {
+          "block": 65,
+          "ts": 1787546341,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "558.4867835513426",
+          "amountOut": "0.2792433917756713",
+          "fromVault": true
+        },
+        {
+          "block": 68,
+          "ts": 1787567951,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "565.4178683457343",
+          "amountOut": "0.28270893417286715",
+          "fromVault": true
+        },
+        {
+          "block": 71,
+          "ts": 1787589571,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "572.4355917000561",
+          "amountOut": "0.28621779585002805",
           "fromVault": true
         }
       ]
@@ -94,20 +174,23 @@
       "account": "0xEB929fc272047cD2e90e12D9460eE4b3344afcb0",
       "vault": "0xf41B47c54dEFF12f8fE830A411a09D865eBb120E",
       "commitment": "0x05a3ff90d95290fe2f8b7da4955172d104c346fd730051c58fba0b5838b6f9ce",
-      "birthBlock": 26,
+      "birthBlock": 30,
       "model": "claude-sonnet-5",
       "riskProfile": 0,
       "cadence": 4,
       "custody": "sealed-authored",
       "tier": 0,
       "seasoned": true,
-      "nav": "1021.875",
-      "pps": "1.021874999999999999",
-      "tradeCount": 2,
+      "nav": "0",
+      "pps": "1",
+      "tradeCount": 9,
+      "runtimeFee": "1",
+      "runtimeFeesPaid": "1",
+      "runtimeFeePayments": 1,
       "trades": [
         {
-          "block": 32,
-          "ts": 1787395189,
+          "block": 36,
+          "ts": 1787416355,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -117,26 +200,103 @@
           "fromVault": false
         },
         {
-          "block": 69,
-          "ts": 1787395205,
+          "block": 48,
+          "ts": 1787438231,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
           "outSym": "mWETH",
-          "amountIn": "50",
-          "amountOut": "0.025",
-          "fromVault": true
+          "amountIn": "25.3125",
+          "amountOut": "0.01265625",
+          "fromVault": false
+        },
+        {
+          "block": 51,
+          "ts": 1787459841,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "25.62890625",
+          "amountOut": "0.012814453125",
+          "fromVault": false
+        },
+        {
+          "block": 54,
+          "ts": 1787481461,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "25.949267578125",
+          "amountOut": "0.0129746337890625",
+          "fromVault": false
+        },
+        {
+          "block": 59,
+          "ts": 1787503111,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "26.273633422851564",
+          "amountOut": "0.013136816711425782",
+          "fromVault": false
+        },
+        {
+          "block": 63,
+          "ts": 1787524731,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "26.602053840637208",
+          "amountOut": "0.013301026920318604",
+          "fromVault": false
+        },
+        {
+          "block": 66,
+          "ts": 1787546341,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "26.934579513645172",
+          "amountOut": "0.013467289756822586",
+          "fromVault": false
+        },
+        {
+          "block": 69,
+          "ts": 1787567951,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "27.271261757565735",
+          "amountOut": "0.013635630878782867",
+          "fromVault": false
+        },
+        {
+          "block": 74,
+          "ts": 1787589581,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "27.612152529535308",
+          "amountOut": "0.013806076264767654",
+          "fromVault": false
         }
       ]
     },
     {
       "tokenId": 3,
-      "name": "Vesper",
+      "name": "",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "account": "0xe5eE9014B5DE50883e8789c6F7219764410DFa14",
       "vault": "0x05242D4AC717Cdf38C36AF290F2b0DA99AA82c67",
       "commitment": "0x6822f9046f1ab2c62c40a0bf10f207b54c7f321d4689abb225cd70f95fb41b16",
-      "birthBlock": 34,
+      "birthBlock": 38,
       "model": "claude-sonnet-5",
       "riskProfile": 2,
       "cadence": 24,
@@ -146,69 +306,10 @@
       "nav": "0",
       "pps": "1",
       "tradeCount": 0,
+      "runtimeFee": "0",
+      "runtimeFeesPaid": "0",
+      "runtimeFeePayments": 0,
       "trades": []
-    },
-    {
-      "tokenId": 4,
-      "name": "Halcyon",
-      "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "account": "0x2A0aD3f501B9185E4c330348Fc4Bb08e6Aa907A1",
-      "vault": "0x1655f30B495586cDC5E1E332844FabF7363b3667",
-      "commitment": "0x0463f65ae16b7e476d38a898c5dc2ebe00b3a8a3e9c7f2ecb50f5d66febeda00",
-      "birthBlock": 55,
-      "model": "claude-sonnet-5",
-      "riskProfile": 0,
-      "cadence": 2,
-      "custody": "sealed-generated",
-      "tier": 0,
-      "seasoned": true,
-      "nav": "0",
-      "pps": "1",
-      "tradeCount": 1,
-      "trades": [
-        {
-          "block": 70,
-          "ts": 1787395205,
-          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-          "inSym": "mUSDC",
-          "outSym": "mWETH",
-          "amountIn": "7.5",
-          "amountOut": "0.00375",
-          "fromVault": false
-        }
-      ]
-    },
-    {
-      "tokenId": 5,
-      "name": "Cassini",
-      "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "account": "0x02CAF8CB752C65991154B9F8ED71E70687992182",
-      "vault": "0x1E01182454073691d6190FC0F977cB7D646981E1",
-      "commitment": "0xfc2b3b8b781f9f576bdd792cd3be31aa6f4f1135e593d6b00d9e5ba1db4153ab",
-      "birthBlock": 62,
-      "model": "claude-sonnet-5",
-      "riskProfile": 1,
-      "cadence": 6,
-      "custody": "sealed-authored",
-      "tier": 0,
-      "seasoned": true,
-      "nav": "0",
-      "pps": "1",
-      "tradeCount": 1,
-      "trades": [
-        {
-          "block": 71,
-          "ts": 1787395205,
-          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-          "inSym": "mUSDC",
-          "outSym": "mWETH",
-          "amountIn": "10",
-          "amountOut": "0.005",
-          "fromVault": false
-        }
-      ]
     }
   ]
 }

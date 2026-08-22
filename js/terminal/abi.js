@@ -10,6 +10,7 @@ export const nftAbi = parseAbi([
   "function vaultOf(uint256) view returns (address)",
   "function accountOf(uint256) view returns (address)",
   "function nameOf(uint256) view returns (string)",
+  "function cadenceOf(uint256) view returns (uint8)",
   "function christen(uint256,string)",
   "function publishEnvelope(uint256,bytes)",
   "function tokenURI(uint256) view returns (string)",
@@ -39,7 +40,12 @@ export const guardAbi = parseAbi([
   "function runtimeFeeOf(uint256) view returns (uint256)",
   "function maxRuntimeFee() view returns (uint256)",
   "function setRuntimeFee(uint256,uint256)",
+  "function cadenceIntervalOf(uint256) view returns (uint64)",
+  "function tradeIntervalOf(uint256) view returns (uint64)",
+  "function nextTradeAt(uint256) view returns (uint64)",
+  "function baseAsset() view returns (address)",
   "event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee)",
+  "event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee)",
   "event TradeExecuted(uint256 indexed tokenId, address indexed venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, bool fromVault)",
   "event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee)",
   "event ExecutorSet(uint256 indexed tokenId, address executor)",
@@ -90,8 +96,20 @@ export const erc20Abi = parseAbi([
 export const registryAbi = parseAbi([
   "function runtimeOf(address) view returns (bytes32 measurement, bytes enclavePublicKey, uint64 registeredAt)",
   "function attested(address) view returns (bool)",
+  "function attestationOf(address) view returns (uint8)",
+  "function hardwareAttested(address) view returns (bool)",
+  "function verifier() view returns (address)",
   "function approvedMeasurement(bytes32) view returns (bool)",
 ]);
+
+/** The machine market the farm pays its lease into (Marlin Oyster on Arbitrum, the mock locally). */
+export const marketAbi = parseAbi([
+  "function jobs(bytes32) view returns (string metadata, address owner, address provider, uint256 rate, uint256 balance, uint256 lastSettled)",
+  "function EXTRA_DECIMALS() view returns (uint256)",
+  "function token() view returns (address)",
+]);
+
+export const ATTESTATION = ["none", "self-reported", "hardware"];
 
 export const tbaAbi = parseAbi([
   "function execute(address to, uint256 value, bytes data, uint8 operation) payable returns (bytes)",

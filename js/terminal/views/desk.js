@@ -3,8 +3,8 @@ import { formatUnits } from "https://esm.sh/viem@2.21.19";
 import * as act from "../actions.js";
 import { TIERS } from "../abi.js";
 import { state } from "../chain.js";
-import { invalidate, loadBrain, loadRoster, ringable } from "../data.js";
-import { addrChip, amountField, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, tip, toast } from "../ui.js";
+import { invalidate, loadBrain, loadFarmLedger, loadRoster, ringable } from "../data.js";
+import { addrChip, amountField, append, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, tip, toast } from "../ui.js";
 
 const TIPS = {
   fund: "mUSDC sent here is the brain's own book. It trades this during the internship; you can sweep it back any time.",
@@ -16,7 +16,8 @@ const TIPS = {
   interval: "Minimum seconds between trades, enforced on-chain. 0 = no limit beyond the declared cadence.",
   transfer: "Sends the token. Everything in the brain's wallet goes with it; sweep first to keep the capital.",
   jar: "The sealed envelope (.sealed.json) this brain was minted with. Publishing puts the ciphertext on-chain so an enclave can run the brain.",
-  fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol; skipped when the book has no cash.",
+  fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol, paid at most once per declared-cadence interval (trades are rate-limited on-chain), skipped when the book has no cash.",
+  account: "The enclave keeps an account per brain: the runtime fees it has received against what the brain's ticks cost it (model tokens, gas). Fees only arrive on trades, so a brain that holds more than it trades runs on credit; past the operator's grace it is paused until the owner raises the fee.",
 };
 import { custodyBadge, jar, statusBadge } from "./floor.js";
 
@@ -52,22 +53,47 @@ async function manage(brain, refresh) {
   const sealed = brain.genome.custody !== 0;
   const enclaveCfg = state.cfg.enclaveExecutor;
   const rtBadge = rt.kind === "enclave" ? badge("Enrolled with the enclave", "good") : rt.kind === "self" ? badge("Self-hosted", "accent") : badge("Not running", "bad");
-  const idBadge = rt.kind === "none" ? null : rt.attested ? badge("attested runtime", "good") : rt.registered ? badge("registered runtime", "accent") : badge("operated", "muted");
+  const idBadge = rt.kind === "none" ? null : rt.attested ? badge(rt.attestation === 2 ? "attested runtime · TDX quote" : "attested runtime · reviewed", "good") : rt.registered ? badge("registered runtime", "accent") : badge("operated", "muted");
   const feeField = amountField({ label: "Runtime fee per trade", value: formatUnits(brain.runtimeFee || 0n, 18), tip: TIPS.fee });
-  const now = Math.floor(Date.now() / 1000);
+  const now = rt.now || Math.floor(Date.now() / 1000);
   const nextText = rt.nextDue ? (rt.nextDue > now ? `in about ${fmt.duration(rt.nextDue - now)}` : "due on the next pass") : "on the next pass";
+  // the enclave's books for this brain, filled in once the endpoint answers
+  const econ = el("div", { class: "runtime-econ" }, state.cfg.enclaveUrl && rt.kind === "enclave" ? el("p", { class: "muted small" }, "Reading the enclave's account for this brain…") : null);
+  if (state.cfg.enclaveUrl && rt.kind === "enclave") {
+    loadFarmLedger(brain.id).then((l) => {
+      if (!l) { econ.replaceChildren(el("p", { class: "muted small" }, "The enclave endpoint did not answer; its account for this brain is not available right now.")); return; }
+      if (!l.brain) { econ.replaceChildren(el("p", { class: "muted small" }, "The enclave has no account for this brain yet (it opens one on the first pass).")); return; }
+      const d = Number(l.decimals); const a = l.brain; const B = (x) => fmt.amt(BigInt(x || 0), d, 4);
+      const suggested = a.suggestedFee != null ? BigInt(a.suggestedFee) : null;
+      clear(econ);
+      append(econ, [
+        el("h5", {}, "Account with the enclave ", tip(TIPS.account)),
+        kv([
+          ["Status", a.overBudget ? badge("paused: over budget", "bad") : badge(l.running ? "running" : "not running", l.running ? "good" : "muted")],
+          ["Paid to the enclave", `${B(a.feesPaid)} mUSDC over ${a.feePayments} trade${a.feePayments === 1 ? "" : "s"}`],
+          ["Cost to run", `${B(a.cost)} mUSDC · ${a.ticks} tick${a.ticks === 1 ? "" : "s"}, ${a.trades} trade${a.trades === 1 ? "" : "s"} (model ${B(a.inferenceCost)}, gas ${B(a.gasCost)})`],
+          ["Credit left", `${B(a.credit)} mUSDC (the enclave extends ${B(l.grace)} of credit; raising the fee resets it)`],
+          suggested != null ? ["Fee that would have covered it", `${B(suggested)} mUSDC per trade at this brain's trade rate so far`, "Total cost divided by trades made. A fee at or above this pays for the brain's holds as well as its trades."] : null,
+        ]),
+        suggested != null && suggested > (brain.runtimeFee || 0n) ? el("div", { class: "btn-row" }, el("button", { class: "btn tiny", onclick: () => { feeField.input.value = formatUnits(suggested, d); feeField.input.focus(); } }, "Use that fee")) : null,
+      ]);
+    });
+  }
   const execField = textField({ label: "Executor key (advanced)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, tip: TIPS.executor });
   const jarInput = el("input", { type: "file", accept: ".json,application/json", class: "jarfile", title: TIPS.jar });
   const runtimePanel = mk("Runtime",
     el("div", { class: "runtime-status" }, rtBadge, idBadge, rt.kind !== "none" ? el("span", { class: "muted" }, `last trade ${rt.lastTradeAt ? fmt.when(rt.lastTradeAt) : "never"} · next tick ${nextText}`) : el("span", { class: "muted" }, "nobody is running this brain")),
     kv([
       ["Executor", brain.policy.executor === ZERO ? badge("not set", "muted") : addrChip(brain.policy.executor, { explorer: ex })],
-      ["Declared cadence", `${brain.genome.cadence}/day (every ${fmt.duration(rt.intervalSec)})`],
+      ["Declared cadence", `${brain.genome.cadence}/day · the guard allows one trade every ${fmt.duration(brain.tradeInterval || rt.intervalSec)}`, "The declared cadence is enforced on-chain as a floor under your minimum interval; you can tighten it below, never loosen it."],
+      brain.nextTradeAt && brain.nextTradeAt > now ? ["Next trade allowed", `in about ${fmt.duration(brain.nextTradeAt - now)}`] : null,
       ["Jar", sealed ? (brain.envelopePublished ? badge("published on-chain", "good") : badge("not published", "bad")) : "with you (authored custody — you run it)"],
       rt.measurement && rt.registered ? ["Runtime measurement", [el("span", { class: "mono small" }, `${rt.measurement.slice(0, 14)}…`), " ", el("span", { class: "muted small" }, rt.attested ? "approved by the protocol (self-reported, not hardware-attested)" : "self-reported, not yet approved")]] : null,
-      ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)})`],
+      ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)}) · at most ${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC a day`, TIPS.fee],
+      brain.runtimeFeePayments ? ["Runtime fees paid", `${fmt.amt(brain.runtimeFeesPaid || 0n, 18, 4)} mUSDC over ${brain.runtimeFeePayments} trade${brain.runtimeFeePayments === 1 ? "" : "s"}`, "From the traded book to the executor, on-chain (RuntimeFeePaid events)."] : null,
     ]),
     el("div", { class: "inline-form" }, feeField.el, el("button", { class: "btn", onclick: async () => { try { await run("Runtime fee", act.setRuntimeFee(brain.id, feeField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Set fee")),
+    econ,
     sealed && !brain.envelopePublished ? el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Publish the sealed jar ", tip(TIPS.jar))), jarInput), el("button", { class: "btn", onclick: async () => {
       const f = jarInput.files && jarInput.files[0]; if (!f) return toast("Choose the .sealed.json file first.", "err");
       const text = await f.text();

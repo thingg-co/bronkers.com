@@ -13,6 +13,21 @@ export function invalidate(id) {
   else cache.brains.delete(Number(id));
 }
 
+// The guard's clock is the chain's, not the browser's (on anvil they drift
+// apart as soon as the clock is moved), so anything compared with an on-chain
+// timestamp uses this.
+let chainTime = { at: 0, ts: 0 };
+export async function chainNow() {
+  if (Date.now() - chainTime.at < 15_000) return chainTime.ts;
+  try {
+    const b = await state.pub.getBlock();
+    chainTime = { at: Date.now(), ts: Number(b.timestamp) };
+    return chainTime.ts;
+  } catch {
+    return Math.floor(Date.now() / 1000);
+  }
+}
+
 const read = (address, abi, functionName, args = [], opts = {}) =>
   state.pub.readContract({ address, abi, functionName, args, ...opts });
 
@@ -235,24 +250,31 @@ export async function loadBrain(id, { force } = {}) {
       return { token: t, sym, vaultBal, tbaBal };
     }),
   );
-  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI] = await Promise.all([
+  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI, tradeInterval, nextTradeAt, feeLogs, now] = await Promise.all([
     read(b.vault, vaultAbi, "convertToAssets", [feeShares]),
     loadTrades(id, b.genome.birthBlock),
     state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "EnvelopePublished", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
     read(guard, guardAbi, "runtimeFeeOf", [BigInt(id)]).catch(() => 0n),
     read(guard, guardAbi, "maxRuntimeFee").catch(() => 0n),
     read(state.cfg.traderNFT, nftAbi, "tokenURI", [BigInt(id)]).catch(() => ""),
+    read(guard, guardAbi, "tradeIntervalOf", [BigInt(id)]).catch(() => 0n),
+    read(guard, guardAbi, "nextTradeAt", [BigInt(id)]).catch(() => 0n),
+    // the runtime fee is a fund expense; it is in the record like any other
+    state.pub.getContractEvents({ address: guard, abi: guardAbi, eventName: "RuntimeFeePaid", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
+    chainNow(),
   ]);
-  const runtime = runtimeStatus(policy[0], Number(policy[4]), b);
+  const runtime = runtimeStatus(policy[0], Number(policy[4]), b, now, Number(tradeInterval));
   if (state.cfg.registry && runtime.kind !== "none") {
     try {
-      const [[measurement, enclavePublicKey, registeredAt], attested] = await Promise.all([
+      const [[measurement, enclavePublicKey, registeredAt], attested, attestation] = await Promise.all([
         read(state.cfg.registry, registryAbi, "runtimeOf", [policy[0]]),
         read(state.cfg.registry, registryAbi, "attested", [policy[0]]),
+        read(state.cfg.registry, registryAbi, "attestationOf", [policy[0]]).catch(() => 0),
       ]);
       runtime.registered = Number(registeredAt) > 0;
       runtime.measurement = measurement;
       runtime.attested = Boolean(attested);
+      runtime.attestation = Number(attestation); // 0 none, 1 self-reported, 2 hardware (TDX quote verified on-chain)
     } catch {}
   }
   let token = null;
@@ -280,6 +302,12 @@ export async function loadBrain(id, { force } = {}) {
     runtime,
     runtimeFee,
     maxRuntimeFee,
+    // what the guard enforces between trades (declared cadence, floored), and when the next one may go
+    tradeInterval: Number(tradeInterval),
+    nextTradeAt: Number(nextTradeAt),
+    maxDailyRuntimeFee: runtimeFee * BigInt(Math.max(1, Number(b.genome.cadence))),
+    runtimeFeesPaid: feeLogs.reduce((s, l) => s + (l.args.fee ?? 0n), 0n),
+    runtimeFeePayments: feeLogs.length,
     token,
     my: { shares: b.myShares, assets: myAssets, usdc: myUsdc, allowance: myAllowance },
     trades,
@@ -291,13 +319,42 @@ export async function loadBrain(id, { force } = {}) {
 }
 
 /** Who is running this brain, as far as the chain can tell. */
-export function runtimeStatus(executor, lastTradeAt, b) {
+export function runtimeStatus(executor, lastTradeAt, b, now = Math.floor(Date.now() / 1000), tradeInterval = 0) {
   const zero = "0x0000000000000000000000000000000000000000";
   const enclave = (state.cfg.enclaveExecutor || "").toLowerCase();
   const kind = !executor || executor === zero ? "none" : enclave && executor.toLowerCase() === enclave ? "enclave" : "self";
-  const intervalSec = Math.max(60, Math.floor(86400 / Math.max(1, Number(b.genome.cadence))));
+  const intervalSec = tradeInterval || Math.max(60, Math.floor(86400 / Math.max(1, Number(b.genome.cadence))));
   const nextDue = lastTradeAt ? lastTradeAt + intervalSec : null;
-  return { kind, lastTradeAt, nextDue, intervalSec, registered: false, attested: false, measurement: null };
+  return { kind, lastTradeAt, nextDue, intervalSec, now, registered: false, attested: false, attestation: 0, measurement: null };
+}
+
+/**
+ * The enclave's own books for one brain (GET enclaveUrl/ledger?tokenId=): what
+ * it has paid, what it has cost, the credit left, whether it is paused, and
+ * the fee that would have covered it. Null when there is no endpoint or it is
+ * unreachable; the chain never depends on it.
+ */
+export async function loadFarmLedger(id) {
+  const url = (state.cfg.enclaveUrl || "").replace(/\/$/, "");
+  if (!url) return null;
+  try {
+    const res = await fetch(`${url}/ledger?tokenId=${Number(id)}`, { cache: "no-store" });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The farm's /health: identity, what it runs, and its budget totals and lease. */
+export async function loadFarmHealth() {
+  const url = (state.cfg.enclaveUrl || "").replace(/\/$/, "");
+  if (!url) return null;
+  try {
+    const res = await fetch(`${url}/health`, { cache: "no-store" });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Static fallback when no chain is reachable: data/traders.json from report.ts. */
@@ -316,6 +373,9 @@ export async function loadSnapshot() {
     tier: t.tier ?? 0,
     seasoned: t.seasoned,
     tradeCount: t.tradeCount,
+    runtimeFee: t.runtimeFee ? BigInt(Math.round(Number(t.runtimeFee) * 1e6)) * 10n ** 12n : 0n,
+    runtimeFeesPaid: t.runtimeFeesPaid ? BigInt(Math.round(Number(t.runtimeFeesPaid) * 1e6)) * 10n ** 12n : 0n,
+    runtimeFeePayments: t.runtimeFeePayments ?? 0,
     nav: BigInt(Math.round(Number(t.nav) * 1e6)) * 10n ** 12n,
     pps: t.pps ? BigInt(Math.round(Number(t.pps) * 1e6)) * 10n ** 12n : WAD,
     sharePriceReturn: t.pps ? Number(t.pps) - 1 : 0,

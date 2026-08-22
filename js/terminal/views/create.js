@@ -21,12 +21,12 @@ const TIPS = {
   prompt: "The brain's instructions. Hashed in this tab (the hash is what gets minted) and encrypted in this tab. Sealed: only the enclave can ever read it. Authored: only someone with your key can.",
   tweaks: "Optional JSON the runtime hands to the model alongside the prompt (style, universe hints, risk notes). Secret, like the prompt; part of the commitment.",
   risk: "A public trait. It is advertised, not enforced; the enforced limits are the seat's per-trade cap and the slippage bound.",
-  cadence: "How often the enclave wakes the brain: 4/day is every 6 hours. Public. The guard can also rate-limit on-chain (My Desk → limits).",
+  cadence: "How often the enclave wakes the brain: 4/day is every 6 hours. Public, and enforced on-chain: the guard allows at most one trade per interval. You can tighten it later (My Desk → limits), never loosen it.",
   markets: "Protocol-curated markets only. You can switch one off later; you can never add one the protocol hasn't curated. This is the wash-trading defence.",
   mgmt: "Charged on vault assets, streamed over time, minted as vault shares to the brain's own wallet. Max 5%/year.",
   perf: "Charged only on share-price gains above the high-water mark. Max 30%. Also minted to the brain's wallet, so it travels with the token.",
   fund: "The brain trades its own wallet first (the internship). Send it some mUSDC to trade with; you can sweep it back any time.",
-  fee: "What the brain pays its executor per trade, from the book it traded, to cover gas and model calls. Owner-set, capped by the protocol, skipped if the book has no cash. The enclave operator publishes the fee it asks for.",
+  fee: "What the brain pays its executor per trade, from the book it traded, to cover gas and model calls. Owner-set, capped by the protocol, skipped if the book has no cash, and bounded per day because the declared cadence caps trades. The enclave operator publishes the fee it asks for and pauses brains whose holds cost more than their trades pay.",
 };
 
 const draft = {
@@ -250,7 +250,8 @@ function step5(root) {
             : el("p", { class: "muted" }, "Authored custody means you hold the key, so you run the brain yourself. This seeds its wallet and authorises the guard; then start the runtime with your key."),
           fund.el,
           sealed ? fee.el : null,
-          sealed && minFee ? el("p", { class: "muted small" }, `This enclave asks for ${minFee} mUSDC per trade; it pauses brains that pay less.`) : null,
+          sealed ? (() => { const line = el("p", { class: "muted small" }); const upd = () => { const f = Number(fee.value() || 0); line.textContent = `Paid only on trades, at most ${draft.cadence} a day (the declared cadence is enforced on-chain), so this brain can pay at most ${fmt.num(f * draft.cadence, 4)} mUSDC a day.`; }; fee.input.addEventListener("input", upd); upd(); return line; })() : null,
+          sealed && minFee ? el("p", { class: "muted small" }, `This enclave asks for ${minFee} mUSDC per trade; it pauses brains that pay less, and brains whose ticks cost more than their fees cover.`) : null,
           enclave || !sealed ? null : el("p", { class: "muted small" }, badge("no enclave configured", "bad"), " This chain has no enclave executor in its config; you can still publish, fund and authorise now and enrol later."),
           el("div", { class: "btn-row" },
             el("button", { class: "btn primary", disabled: !id, onclick: sealed ? startSealed : startAuthored }, sealed ? (enclave ? "Publish, fund, authorise, enrol" : "Publish, fund, authorise") : "Fund and authorise"),

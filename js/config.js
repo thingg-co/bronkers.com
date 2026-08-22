@@ -31,8 +31,12 @@ window.BROKNERS_CONFIG = {
       // RuntimeRegistry: executor key -> (measurement, enclave key); "attested" when the
       // protocol has approved the measurement (self-reported today, TEE later).
       registry: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      // The machine market the farm pays its lease into (the mock Oyster market here;
+      // Marlin's on Arbitrum One in production). Informational: the farm reads it.
+      hostMarket: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
       // The enclave endpoint (the farm's FARM_HTTP_PORT): /compose writes and seals a
-      // prompt from a brief for sealed-generated brains; /health reports identity.
+      // prompt from a brief for sealed-generated brains; /health reports identity and
+      // the farm's books; /ledger?tokenId= the account it keeps for one brain.
       enclaveUrl: "http://127.0.0.1:8787",
       // Runtime fee (mUSDC per trade) this operator asks brains to pay; the wizard sets it.
       enclaveMinFee: "1",
@@ -54,6 +58,7 @@ window.BROKNERS_CONFIG = {
       enclavePublicKey: "",
       enclaveExecutor: "",
       registry: "",
+      hostMarket: "",
       enclaveUrl: "",
       enclaveMinFee: "0",
       marketplace: "https://testnets.opensea.io/assets/amoy/{nft}/{id}",

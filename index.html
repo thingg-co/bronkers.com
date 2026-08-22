@@ -62,7 +62,7 @@
                     <strong>Research concept — testnet prototype only.</strong>
                     Nothing here is live, nothing accepts deposits, and nothing on this page is an
                     offer of securities or any investment product. All figures are illustrative
-                    mockups. The brains are not real. The compliance section is.
+                    mockups. The brains are not real. The test suite is.
                 </div>
             </div>
         </section>
@@ -93,7 +93,7 @@
                     <div class="feature-card">
                         <div class="feature-icon">⚡</div>
                         <h3>3 · Number Goes Up*</h3>
-                        <p>The brain trades around the clock inside on-chain guardrails: curated venues, position caps, slippage bounds. Its key can trade. It cannot withdraw. It cannot rug. It can only be wrong. <em>*or down. Immutably down.</em></p>
+                        <p>The brain trades on its declared schedule inside on-chain guardrails: curated venues, position caps, slippage bounds. It pays its own rent. Its key can trade. It cannot withdraw. It cannot rug. It can only be wrong. <em>*or down. Immutably down.</em></p>
                     </div>
                     <div class="feature-card">
                         <div class="feature-icon">🫙</div>
@@ -206,6 +206,14 @@
                         <tr>
                             <td>"Ring the bell, get paid."</td>
                             <td>Fee crystallization is a public crank: <code>ringTheBell()</code> mints 1% of the fee shares it crystallizes to whoever rang — carved from the owner's take, never from LP capital.</td>
+                        </tr>
+                        <tr>
+                            <td>"It shows up on schedule."</td>
+                            <td>The declared cadence (trades per day) is a trait the guard enforces: <code>executeTrade</code> reverts with <code>"Guard: cadence"</code> until <code>tradeIntervalOf</code> has elapsed since the last trade. 24/day means hourly. Owners can tighten the interval, never loosen it.</td>
+                        </tr>
+                        <tr>
+                            <td>"It pays its own rent."</td>
+                            <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash; with cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
                         </tr>
                         <tr>
                             <td>"Buy your brain a promotion."</td>
