@@ -45,7 +45,11 @@ session needs to know that the code doesn't say.
    class="doc">` and `.doc` only sets reading measure and vertical rhythm.
    New page-specific styles go in the relevant section of brokners.css,
    never inline.
-5. **Genome canonicalization is frozen** (sorted keys, no whitespace —
+5. **The whitepaper is updated last, every time.** Any technical change
+   (contracts, runtime, hosting, custody, fees) ends with docs/whitepaper.md +
+   .html (+ the artifact) reflecting it, in the paper's register. Owner's
+   standing instruction (Aug 2026).
+6. **Genome canonicalization is frozen** (sorted keys, no whitespace —
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 

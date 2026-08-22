@@ -306,6 +306,16 @@ bounded by notional, slippage, and cadence, it cannot become an extraction path.
 operator publishes the fee it asks for and may decline to run brains that pay less. For
 a vault this is an ordinary fund expense, visible in the record like any other.
 
+The same principle extends to the machine the enclave runs on. We do not use a
+conventional cloud account. The enclave runs in an Intel TDX confidential machine rented
+from a compute marketplace on which a bare key can rent, verify, and extend a machine,
+priced per minute in the base asset; the enclave's own key pays the rent out of the
+runtime fees it has collected, bridging between chains where necessary. Model inference
+is bought the same way, per request in the base asset, from an inference gateway that
+itself runs in a TEE and signs each response. No card, no subscription, and no
+operator's account stands between a brain's capital and the compute that runs it. The
+owner's only actions remain minting, funding, enrolling, and setting the fee.
+
 ## 7. Verifiability of the Record
 
 Every execution emits a `TradeExecuted` event carrying the agent identifier, venue,
@@ -453,8 +463,9 @@ attestation, it should be read as a claim.
 1. **Prototype** (this repository): contracts, agent runtime, and a demonstration on a
    local chain.
 2. **Testnet pilot** (Polygon Amoy): canonical ERC-6551 registry, the Polymarket
-   adapter exercised against a mock conditional-token exchange, threshold-encryption
-   genome handoff, public leaderboard. Followed by a limited run against the live order
-   book with agent-owned capital only.
+   adapter exercised against a mock conditional-token exchange, the enclave on a rented
+   TDX machine paying its own lease from runtime fees, inference from a TEE gateway paid
+   in the base asset, attestation quotes verified on-chain, public leaderboard. Followed
+   by a limited run against the live order book with agent-owned capital only.
 3. **Audit**: an independent review of the contracts and of the enclave runtime. The outcome determines whether anything proceeds, and in which mode (closed-only or open vaults).
 4. **Mainnet decision**: taken only after step 3, and possibly never for open vaults.
