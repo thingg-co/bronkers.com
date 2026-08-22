@@ -6,7 +6,7 @@ import { erc20Abi, guardAbi, registryAbi, traderNftAbi, vaultAbi } from "./abi.j
 import { createBrain, describeBackend, type Brain } from "./brain.js";
 import { defaultPrices, Ledger } from "./budget.js";
 import { chainId, config, publicClient, snapshot, walletClient, type Book } from "./chain.js";
-import { composePrompt, enclavePublicKeyOf, seal, type SealedEnvelope, unseal } from "./enclave.js";
+import { composePrompt, composeRevision, enclavePublicKeyOf, seal, type SealedEnvelope, unseal } from "./enclave.js";
 import { execute, prepare } from "./executor.js";
 import { commit, type Genome } from "./genome.js";
 import { hostFromEnv, type HostStatus } from "./host.js";
@@ -48,10 +48,18 @@ import { buildTranscript, saveTranscript } from "./transcript.js";
  * audit. The guard pays the runtime fee only to an attested executor, so the
  * farm says at start whether it is one.
  *
+ * Generations: a brain's owner may revise it (TraderNFT.revise). The farm
+ * notices the commitment change, reopens the latest jar, verifies it against
+ * the new commitment and runs the new generation; while the guard has it in
+ * training camp it spars on the own book only. POST /train {tokenId, brief}
+ * coaches a sealed brain: the enclave opens the current jar, appends the
+ * note, seals the next generation and returns {commitment, envelope}; the
+ * owner publishes and revises. No plaintext leaves.
+ *
  * Enclave endpoint (optional, FARM_HTTP_PORT): GET /health, GET /ledger
  * [?tokenId=], POST /compose {brief, tweaks} -> {commitment, envelope} for
- * sealed-generated brains. The prompt is composed and sealed in-process and
- * never returned.
+ * sealed-generated brains, POST /train. Prompts are composed and sealed
+ * in-process and never returned.
  *
  * Flags: --once (tick every due brain once, then exit), --mock-brain,
  *        --dry-run, --measure (print the runtime measurement and exit).
@@ -267,6 +275,11 @@ async function enrol(): Promise<void> {
     }
 
     const onChain = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "genomeOf", args: [tokenId] });
+    if (r && r.commitment !== onChain.commitment) {
+      const gen = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "generationOf", args: [tokenId] });
+      console.log(`${r.label}: revised to generation ${gen}; reopening the jar against the new commitment`);
+      running.delete(tokenId);
+    }
     try {
       await refreshFees(tokenId, BigInt(onChain.birthBlock));
     } catch (e) {
@@ -305,6 +318,7 @@ async function enrol(): Promise<void> {
       continue;
     }
     const name = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "nameOf", args: [tokenId] });
+    const generation = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "generationOf", args: [tokenId] });
     const cadence = Math.max(1, onChain.cadence);
     const intervalSec = Math.max(60, Math.floor(86_400 / cadence));
     running.set(tokenId, {
@@ -319,7 +333,7 @@ async function enrol(): Promise<void> {
       commitment: onChain.commitment,
     });
     skipped.delete(tokenId);
-    console.log(`${running.get(tokenId)!.label}: enrolled · cadence ${cadence}/day · fee ${fmtBase(fee)} · genome verified ${onChain.commitment.slice(0, 10)}…`);
+    console.log(`${running.get(tokenId)!.label}: enrolled · generation ${generation} · cadence ${cadence}/day · fee ${fmtBase(fee)} · genome verified ${onChain.commitment.slice(0, 10)}…`);
   }
   ledger.save();
 }
@@ -331,11 +345,22 @@ async function chooseBook(tokenId: bigint): Promise<Book | null> {
     publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "accountOf", args: [tokenId] }),
     publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "seasoned", args: [tokenId] }),
   ]);
-  const [vaultAssets, ownNav, allowance] = await Promise.all([
+  const [vaultAssets, ownNav, allowance, camp] = await Promise.all([
     publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "totalAssets" }),
     publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "tbaNav", args: [tokenId] }),
     publicClient.readContract({ address: base, abi: erc20Abi, functionName: "allowance", args: [tba, config.guard] }),
+    publicClient.readContract({ address: config.guard, abi: guardAbi, functionName: "campStatus", args: [tokenId] }),
   ]);
+  const [generation, inCamp, campTrades, campMin, vaultFrom] = camp;
+  if (inCamp) {
+    // a revised generation spars on the own book until the guard lets it fight
+    if (ownNav > 0n && allowance > 0n) {
+      note(tokenId, `in camp (generation ${generation}): sparring on the own book, ${campTrades}/${campMin} trades${Number(vaultFrom) * 1000 > Date.now() ? `, vault from ${new Date(Number(vaultFrom) * 1000).toISOString()}` : ""}`);
+      return "own";
+    }
+    note(tokenId, `in camp (generation ${generation}) but the own book is empty or unauthorised; fund and authorise the brain's wallet so it can spar`);
+    return null;
+  }
   if (seasoned && vaultAssets > 0n) return "vault";
   if (ownNav > 0n && allowance > 0n) return "own";
   if (ownNav > 0n) note(tokenId, "wallet funded but the guard is not authorised (owner: My Desk → Authorise the guard)");
@@ -483,6 +508,33 @@ function startHttp(): void {
       res.end(json({ ...all, minFee, host: { ...all.host, status: lastHostStatus } }));
       return;
     }
+    if (req.method === "POST" && url.pathname === "/train") {
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 64_000) req.destroy(); });
+      req.on("end", async () => {
+        try {
+          const { tokenId, brief } = JSON.parse(body || "{}") as { tokenId?: number | string; brief?: string };
+          if (!brief || typeof brief !== "string" || brief.length > 4_000) throw new Error("brief must be a string up to 4000 characters");
+          const id = BigInt(tokenId ?? 0);
+          if (id <= 0n) throw new Error("tokenId required");
+          const onChain = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "genomeOf", args: [id] });
+          if (onChain.custody === 0) throw new Error("an authored brain is revised by its owner, who holds the key");
+          const env = await latestEnvelope(id, BigInt(onChain.birthBlock));
+          if (!env) throw new Error("no published jar for this brain yet");
+          const current = JSON.parse(unseal(env, enclaveKey)) as Genome;
+          if (commit(current) !== onChain.commitment) throw new Error("the published jar does not match the current generation; publish the current jar first");
+          const next = composeRevision(current, brief);
+          const generation = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "generationOf", args: [id] });
+          // the plaintext of both generations exists only in this scope
+          res.writeHead(200, cors);
+          res.end(JSON.stringify({ commitment: commit(next), envelope: seal(JSON.stringify(next), enclavePub), generation: Number(generation) + 1, custody: onChain.custody }));
+        } catch (e) {
+          res.writeHead(400, cors);
+          res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
+        }
+      });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/compose") {
       let body = "";
       req.on("data", (c) => { body += c; if (body.length > 64_000) req.destroy(); });
@@ -505,7 +557,7 @@ function startHttp(): void {
     res.writeHead(404, cors);
     res.end(JSON.stringify({ error: "not found" }));
   });
-  server.listen(httpPort, "127.0.0.1", () => console.log(`enclave endpoint on http://127.0.0.1:${httpPort} (GET /health, GET /ledger, POST /compose)`));
+  server.listen(httpPort, "127.0.0.1", () => console.log(`enclave endpoint on http://127.0.0.1:${httpPort} (GET /health, GET /ledger, POST /compose, POST /train)`));
 }
 
 await registerRuntime();

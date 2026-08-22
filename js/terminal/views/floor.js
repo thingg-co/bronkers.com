@@ -37,6 +37,7 @@ export function jar(b) {
 }
 
 export function statusBadge(b) {
+  if (b.inCamp) return badge(`in camp · gen ${b.generation}`, "accent");
   if (b.seasoned) return badge("seasoned", "good");
   return badge("intern", "muted");
 }

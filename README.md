@@ -76,6 +76,11 @@ Polygon Amoy and prints the `js/config.js` block.
   any time, no lockup; the executor key cannot touch or block withdrawals.
   Withdrawals pay the base asset, so a heavily-deployed vault may need the
   brain to unwind positions first (prototype limitation, documented).
+- **Training**: an owner can revise a brain (My Desk → Training) into a new
+  generation: committed before it trades, sparred on the brain's own wallet,
+  and only then allowed to trade the vault; trades stay attributed to the
+  generation that made them and the high-water mark carries. Sealed-generated
+  brains are coached with a note the enclave applies inside the jar.
 - **Owners**: your capital lives in the brain's token-bound wallet — sweep it
   whenever you like via the TBA (owner-only). Fee earnings accrue there as
   vault shares; redeem them through the vault, then sweep.

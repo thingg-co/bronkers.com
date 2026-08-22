@@ -58,9 +58,11 @@ session needs to know that the code doesn't say.
    standing instruction (Aug 2026).
 6. **Genome canonicalization is frozen** (sorted keys, no whitespace —
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
-   breaks every on-chain commitment.
+   breaks every on-chain commitment. Genome *immutability is per generation*
+   (Aug 2026): `TraderNFT.revise` appends a committed generation; it never
+   changes what a past trade was made under.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 64 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 69 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
@@ -73,6 +75,14 @@ session needs to know that the code doesn't say.
   move the anvil clock (`evm_increaseTime`) between ticks; the Developer tab
   has the lever.
 - Paper season gates vault deposits (own-book trades first, fromVault=false).
+- **Generations and training camp** (Aug 2026): `revise(id, commitment, model,
+  cid)` owner-only, appends; `generationOf/generationAt/GenomeRevised`; the
+  guard keys `campTradesOf[id][gen]` on own-book trades and refuses vault trades
+  for a revised generation until `campMinTrades` spars and `revisionNotice`
+  (`setCamp`; 1 spar + 0 locally, 86400 on testnet); HWM carries (tests in
+  Generations.t.sol). Farm re-enrols on commitment change and spars in camp;
+  `/train` coaches sealed brains in-enclave (`composeRevision`). Meme: "they
+  train between fights". 69 tests.
 - Fees: streamed mgmt + perf above per-share HWM, minted to the trader's TBA
   (travel with the NFT), checkpointed in the transfer hook.
 - ringTheBell(): caller gets 1% of crystallized fee shares, from the owner's

@@ -44,6 +44,15 @@ contract ExecutionGuard is ReentrancyGuard {
     uint64 public immutable seasonDuration;
     uint32 public immutable seasonMinTrades;
 
+    /// Training camp: a revised genome (generation >= 1) spars on the brain's
+    /// own book before it may trade the vault: campMinTrades own-book trades
+    /// under that generation, and revisionNotice elapsed since it was committed,
+    /// so depositors can leave before a strategy they did not back trades their
+    /// money. The mint genome's camp is the paper season itself.
+    uint32 public campMinTrades;
+    uint64 public revisionNotice;
+    mapping(uint256 => mapping(uint32 => uint32)) public campTradesOf; // tokenId -> generation -> own-book trades
+
     /// Seat tiers: a brain's tier sets the ceiling of its trading policy.
     /// Everyone mints as an Intern; upgrades cost a one-time fee in the base
     /// asset, paid to the protocol treasury. Tier is mechanical, not
@@ -112,6 +121,7 @@ contract ExecutionGuard is ReentrancyGuard {
     event VenueCurated(address indexed venue, bool curated);
     event TokenCurated(address indexed token, bool curated);
     event TierActivated(uint256 indexed tokenId, uint8 tier, uint256 fee);
+    event CampConfigured(uint32 minTrades, uint64 notice);
     event TierConfigured(uint8 tier, uint16 maxNotionalBps, uint256 fee);
     event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee);
     event RuntimeFeeScheduled(uint256 indexed tokenId, uint256 fee, uint64 effectiveAt);
@@ -135,6 +145,7 @@ contract ExecutionGuard is ReentrancyGuard {
         treasury = msg.sender;
         seasonDuration = seasonDuration_;
         seasonMinTrades = seasonMinTrades_;
+        campMinTrades = seasonMinTrades_ == 0 ? 1 : seasonMinTrades_; // a new generation always spars at least once
         // default seat tiers (testnet numbers; deployer can retune via setTier)
         tiers[TIER_INTERN] = TierConfig({maxNotionalBps: 2_000, fee: 0});
         tiers[TIER_ASSOCIATE] = TierConfig({maxNotionalBps: 3_000, fee: 100e18});
@@ -146,6 +157,15 @@ contract ExecutionGuard is ReentrancyGuard {
         require(tier < 3 && maxNotionalBps <= 10_000, "Guard: bad tier");
         tiers[tier] = TierConfig({maxNotionalBps: maxNotionalBps, fee: fee});
         emit TierConfigured(tier, maxNotionalBps, fee);
+    }
+
+    /// @notice Training-camp parameters for revised genomes (deployer-level).
+    function setCamp(uint32 minTrades, uint64 notice) external {
+        require(msg.sender == deployer, "Guard: not deployer");
+        require(minTrades > 0, "Guard: camp");
+        campMinTrades = minTrades;
+        revisionNotice = notice;
+        emit CampConfigured(minTrades, notice);
     }
 
     function setTreasury(address treasury_) external {
@@ -344,6 +364,10 @@ contract ExecutionGuard is ReentrancyGuard {
         // declared cadence is a bound, not a label: the owner may tighten it, never loosen it
         require(p.lastTradeAt == 0 || block.timestamp >= p.lastTradeAt + tradeIntervalOf(tokenId), "Guard: cadence");
 
+        // a revised genome trades the vault only once it has sparred on the own book
+        uint32 generation = nft.generationOf(tokenId);
+        if (fromVault) require(campDone(tokenId, generation), "Guard: in camp");
+
         address source = fromVault ? nft.vaultOf(tokenId) : nft.accountOf(tokenId);
 
         // per-trade notional cap, measured in base-asset terms against source NAV
@@ -366,6 +390,7 @@ contract ExecutionGuard is ReentrancyGuard {
         p.lastTradeAt = uint64(block.timestamp);
         if (firstTradeAt[tokenId] == 0) firstTradeAt[tokenId] = uint64(block.timestamp);
         tradeCountOf[tokenId]++;
+        if (!fromVault) campTradesOf[tokenId][generation]++;
         emit TradeExecuted(tokenId, venue, tokenIn, tokenOut, amountIn, amountOut, fromVault);
         if (transcript != bytes32(0)) emit TranscriptCommitted(tokenId, transcript);
 
@@ -403,6 +428,28 @@ contract ExecutionGuard is ReentrancyGuard {
     function nextTradeAt(uint256 tokenId) external view returns (uint64) {
         uint64 last = policyOf[tokenId].lastTradeAt;
         return last == 0 ? 0 : last + tradeIntervalOf(tokenId);
+    }
+
+    /// @notice Has this generation earned the vault? The mint genome is
+    /// covered by the paper season; a revision needs campMinTrades own-book
+    /// trades under it and revisionNotice since it was committed.
+    function campDone(uint256 tokenId, uint32 generation) public view returns (bool) {
+        if (generation == 0) return true;
+        if (campTradesOf[tokenId][generation] < campMinTrades) return false;
+        return block.timestamp >= nft.generationSince(tokenId, generation) + revisionNotice;
+    }
+
+    /// @notice The current generation's camp: in camp, trades sparred, trades needed, earliest vault time.
+    function campStatus(uint256 tokenId)
+        external
+        view
+        returns (uint32 generation, bool inCamp, uint32 trades, uint32 minTrades, uint64 vaultFrom)
+    {
+        generation = nft.generationOf(tokenId);
+        trades = campTradesOf[tokenId][generation];
+        minTrades = generation == 0 ? 0 : campMinTrades;
+        vaultFrom = generation == 0 ? 0 : nft.generationSince(tokenId, generation) + revisionNotice;
+        inCamp = !campDone(tokenId, generation);
     }
 
     /// @notice Paper-season gate, checked by the vault before outside

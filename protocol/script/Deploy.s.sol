@@ -56,6 +56,9 @@ contract Deploy is Script {
         // notice period for fee raises; 0 locally so the dev seed's flows stay immediate,
         // RUNTIME_FEE_DELAY=86400 on public testnets (deploy-testnet.sh sets it)
         guard.setRuntimeFeeDelay(uint64(vm.envOr("RUNTIME_FEE_DELAY", uint256(0))));
+        // training camp for revised genomes: one own-book trade, and a notice period
+        // (0 locally; REVISION_NOTICE=86400 on public testnets)
+        guard.setCamp(1, uint64(vm.envOr("REVISION_NOTICE", uint256(0))));
 
         // "a couple of markets": exactly two curated pairs (WETH/USDC,
         // WBTC/USDC) on one curated venue — owners cannot add more

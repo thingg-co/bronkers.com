@@ -2,7 +2,7 @@
 
 **Autonomous traders with verifiable, transferable track records**
 
-*Concept paper, v0.4 working draft, August 2026*
+*Concept paper, v0.5 working draft, August 2026*
 
 > **Status.** This is a research document describing a testnet prototype. The
 > contracts, runtime, and figures described here run on a local chain and on testnets
@@ -29,8 +29,8 @@ of agents, considered together, behaves like a multi-manager fund whose managers
 themselves transferable assets.
 
 Most of the design decisions below follow from three requirements: that a track record
-be recomputable by anyone from public data; that the strategy which produced it be
-fixed at the moment the record begins; and that neither property be lost when ownership
+be recomputable by anyone from public data; that the strategy which produced each part
+of it be fixed before that part begins; and that neither property be lost when ownership
 changes.
 
 The initial trading venue is Polymarket, a prediction market whose outcome tokens are
@@ -55,9 +55,9 @@ transaction from an address that provably belongs to the token, so net asset val
 returns can be derived from public logs and cannot be edited or selectively reported
 after the fact. The agent is property in the ordinary sense, so its identity, history,
 fee entitlements, and (if the seller chooses) its assets move with a single transfer.
-And because the strategy is committed by hash at mint and has no update path, a buyer
-can be confident that the agent producing future trades is the one that produced the
-past ones.
+And because every strategy the agent has run was committed by hash before it traded and
+is never edited in place, a buyer can tell which committed strategy produced each part of
+the record and which one will produce the next trade.
 
 An agent of this kind has no key-person risk in the usual meaning: it cannot resign,
 fall ill, or leave to start a competing fund. It introduces other risks in their place,
@@ -83,9 +83,16 @@ whitespace) and is part of the protocol specification, since any change to it wo
 invalidate every existing commitment. The plaintext prompt is encrypted and held
 off-chain; only the hash is stored.
 
-There is no function to update a genome. This is what gives the record its provenance:
-the strategy that produced the history is, by construction, the strategy being
-transferred.
+A genome cannot be edited, but it can be succeeded. The owner may revise the agent by
+committing a new genome, which becomes a new generation; the old generation's
+commitment, the block at which each generation began, and the model each used are kept
+on-chain. No function changes what a past trade was made under, and a generation is
+always committed before it trades, so every trade in the record is attributable to
+exactly one committed strategy and the history cannot be backfilled. This is what gives
+the record its provenance: each epoch of the history was produced by a strategy that was
+fixed before that epoch began, and the sequence of strategies is itself part of what is
+transferred. A revised generation does not begin trading outside capital at once; Section
+5 describes the training camp it serves first.
 
 ### 3.1 Custody modes
 
@@ -124,6 +131,14 @@ plaintext is never written, returned, or logged. The minter commits that hash an
 publishes that envelope exactly as for a sealed-authored brain. The trust placed in the
 endpoint is the trust already placed in the enclave, and it is the same trust
 attestation is meant to discharge.
+
+Revision respects custody. An authored agent is revised by its owner, who writes the next
+prompt and keeps the next key. A sealed-authored agent is revised by sealing the next
+prompt in the browser and publishing it. A sealed-generated agent is coached rather than
+rewritten: the owner supplies a note, the enclave opens the current genome, appends the
+note, seals the next generation and returns only its commitment and ciphertext, so the
+agent can be trained for years without any human ever reading the strategy. In every
+case the new commitment is recorded before the new generation trades.
 
 ## 4. Token-Bound Ownership
 
@@ -171,6 +186,16 @@ external capital at all. Every agent must first complete a paper season, a
 protocol-specified minimum number of trades on its own book over a minimum period,
 before its vault will accept a deposit. The site refers to this as the internship. The
 effect is that depositors never fund an untested prompt; they fund a record.
+
+The same principle governs revision. A new generation may trade the agent's own wallet
+at once, but it may not trade the vault until it has made a protocol-specified minimum
+number of trades on the own book under that generation and a notice period has passed
+since it was committed; the site calls this the training camp. Depositors therefore see
+a change of strategy before their capital is traded by it and can withdraw first, and
+the high-water mark is untouched by revision, so a new generation earns no performance
+fee until it has recovered whatever the previous one lost. An owner who keeps training
+an agent between fights is, in the protocol's terms, appending committed generations,
+each of which spars before it fights.
 
 Administrative control of the vault, including rotation of the executor key and
 narrowing of trading policy, follows `ownerOf(tokenId)` at all times. Acquiring the
@@ -354,8 +379,11 @@ actions remain minting, funding, enrolling, and setting the fee.
 Every execution emits a `TradeExecuted` event carrying the agent identifier, venue,
 tokens, amounts, and timestamp. An off-chain indexer aggregates these into NAV series,
 returns, drawdown, and ranking data, but it only summarises; any party can recompute
-the same figures from the logs. The genome commitment ties the record to the strategy:
-an unchanged hash since the birth block means a single strategy produced every trade.
+the same figures from the logs. The genome commitments tie the record to the
+strategies: every trade falls within the epoch of exactly one committed generation; an
+unchanged hash since the birth block means a single strategy produced every trade, and a
+revised agent's record reads as a sequence of such epochs, each attributable to the
+commitment that preceded it.
 
 Where the venue matches orders off-chain, as Polymarket does, the record is the
 settlement. The indexer reads fills from the exchange contract's events; order
@@ -399,7 +427,9 @@ what can be read from chain state:
 1. The custody trait. Sealed agents (modes 1 and 2) have no plaintext to receive and
    nothing a prior owner can covertly retain. For an authored agent (mode 0), verify
    that the genome hash matches the encrypted blob to be delivered, and price in the
-   fact that past owners keep the strategy.
+   fact that past owners keep the strategy. Read the generations: how many times the
+   agent was revised, when, and which part of the record each generation produced; a
+   record made by several strategies is several records.
 2. The token-bound wallet: balances, and any outstanding approvals left by prior
    owners.
 3. Vault state: NAV, share supply, fee parameters, high-water mark, and accrued fee
@@ -476,8 +506,9 @@ the damage; production should route through private order flow.
 
 **Model risk.** Model outputs are non-deterministic, so the same genome will not
 reproduce the same trades, and deprecation or drift of the underlying model changes an
-agent's behaviour partway through its record. The model identifier is pinned in the
-public traits for this reason.
+agent's behaviour partway through its record. The model identifier is pinned per
+generation for this reason: moving an agent to a newer model is a revision, recorded as
+such, and served through the training camp like any other.
 
 **Key risk.** The executor key is a hot key with a bounded blast radius by design. The
 owner key is ordinary NFT custody, and its compromise is total loss.

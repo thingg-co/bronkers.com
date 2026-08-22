@@ -64,6 +64,23 @@ export function composePrompt(brief: string): string {
   ].join("\n");
 }
 
+/**
+ * In-enclave training (prototype). The owner coaches a sealed brain with a
+ * brief; the enclave appends it to the current genome as a numbered coach's
+ * note and keeps the revision list in the tweaks, so the next generation is
+ * a committed descendant of the last one and still no human has read the
+ * prompt. Production would run a model call inside the TEE to rewrite the
+ * prompt from the note; the shape of the result is the same.
+ */
+export function composeRevision(genome: { prompt: string; tweaks: Record<string, unknown> }, brief: string): { prompt: string; tweaks: Record<string, unknown> } {
+  const prior = Array.isArray(genome.tweaks.revisions) ? (genome.tweaks.revisions as unknown[]) : [];
+  const n = prior.length + 1;
+  return {
+    prompt: `${genome.prompt}\n\nCoach's note ${n}: ${brief}`,
+    tweaks: { ...genome.tweaks, revisions: [...prior, { n, brief }] },
+  };
+}
+
 export function enclaveKeygen(): { publicKeyB64: string; privateKeyB64: string } {
   const { publicKey, privateKey } = generateKeyPairSync("x25519");
   return {

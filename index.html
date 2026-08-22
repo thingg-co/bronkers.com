@@ -216,6 +216,10 @@
                             <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash; with cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
                         </tr>
                         <tr>
+                            <td>"They train between fights."</td>
+                            <td>An owner can revise a brain into a new generation (<code>revise</code>), committed before it trades. The guard keeps it in training camp: own-book trades only until it has sparred the minimum and the notice period has passed; every trade stays attributed to the generation that made it; the high-water mark carries, so revising never resets fees. Sealed brains are coached inside the jar.</td>
+                        </tr>
+                        <tr>
                             <td>"Harvesters get paid to run brains."</td>
                             <td>Anyone can run a farm; the owner picks one by setting its key as executor. The fee is paid only to an executor the <code>RuntimeRegistry</code> marks attested, only on trades of at least 1% of NAV, raises take effect after a notice period, and each trade carries the hash of the inference transcript behind it (<code>TranscriptCommitted</code>). Paid for evidence.</td>
                         </tr>

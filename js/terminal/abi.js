@@ -15,10 +15,14 @@ export const nftAbi = parseAbi([
   "function publishEnvelope(uint256,bytes)",
   "function tokenURI(uint256) view returns (string)",
   "function mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
+  "function revise(uint256,bytes32,string,string)",
+  "function generationOf(uint256) view returns (uint32)",
+  "function generationAt(uint256,uint32) view returns (bytes32 commitment, string model, string encryptedPromptCID, uint64 sinceBlock, uint64 sinceTime)",
   "function safeTransferFrom(address,address,uint256)",
   "event TraderBorn(uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault)",
   "event Christened(uint256 indexed tokenId, string name)",
   "event EnvelopePublished(uint256 indexed tokenId, bytes envelope)",
+  "event GenomeRevised(uint256 indexed tokenId, uint32 generation, bytes32 commitment, string model)",
 ]);
 
 export const guardAbi = parseAbi([
@@ -44,6 +48,7 @@ export const guardAbi = parseAbi([
   "function runtimeFeeDelay() view returns (uint64)",
   "function minFeeNotionalBps() view returns (uint16)",
   "function registry() view returns (address)",
+  "function campStatus(uint256) view returns (uint32 generation, bool inCamp, uint32 trades, uint32 minTrades, uint64 vaultFrom)",
   "function cadenceIntervalOf(uint256) view returns (uint64)",
   "function tradeIntervalOf(uint256) view returns (uint64)",
   "function nextTradeAt(uint256) view returns (uint64)",

@@ -28,8 +28,15 @@ contract TraderNFT is ERC721, ITraderNFT {
     uint8 public constant CUSTODY_SEALED_AUTHORED = 1;
     uint8 public constant CUSTODY_SEALED_GENERATED = 2;
 
+    /// The current generation's genome. A brain is born with generation 0
+    /// and the owner may revise it: each revision appends a generation with a
+    /// new commitment (and possibly a new model), committed before any trade is
+    /// made under it, so every trade in the record is attributable to exactly
+    /// one committed strategy and nothing can be backfilled. The public traits
+    /// (risk, cadence, custody) and the birth block belong to the token and do
+    /// not change.
     struct Genome {
-        bytes32 commitment; // keccak256 of canonical genome JSON — never changes
+        bytes32 commitment; // keccak256 of canonical genome JSON of the CURRENT generation
         uint64 birthBlock;
         uint8 riskProfile; // 0 conservative / 1 balanced / 2 aggressive
         uint8 cadence; // declared max trades per day (>= 1; the guard enforces it as a minimum interval)
@@ -48,8 +55,18 @@ contract TraderNFT is ERC721, ITraderNFT {
     /// One brain per bit: the collection is hard-capped at 2^12.
     uint256 public constant MAX_SUPPLY = 4096;
 
+    /// One entry per generation: what was committed and when it became current.
+    struct Generation {
+        bytes32 commitment;
+        string model;
+        string encryptedPromptCID;
+        uint64 sinceBlock;
+        uint64 sinceTime;
+    }
+
     uint256 public nextId;
     mapping(uint256 => Genome) private _genomes;
+    mapping(uint256 => Generation[]) private _generations;
     mapping(uint256 => address) private _vaults;
     mapping(uint256 => string) private _names;
 
@@ -61,6 +78,9 @@ contract TraderNFT is ERC721, ITraderNFT {
         uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault
     );
     event Christened(uint256 indexed tokenId, string name);
+    /// A new generation: the brain trains between fights. Committed before it
+    /// trades; the guard makes it spar on the own book before it touches the vault.
+    event GenomeRevised(uint256 indexed tokenId, uint32 generation, bytes32 commitment, string model);
     /// The sealed genome envelope, published as calldata so the enclave can
     /// find it by scanning logs. It is ciphertext only the enclave key opens;
     /// the plaintext still never touches the chain.
@@ -112,6 +132,8 @@ contract TraderNFT is ERC721, ITraderNFT {
             encryptedPromptCID: encryptedPromptCID
         });
 
+        _generations[tokenId].push(Generation(commitment, model, encryptedPromptCID, uint64(block.number), uint64(block.timestamp)));
+
         address account =
             registry.createAccount(accountImplementation, TBA_SALT, block.chainid, address(this), tokenId);
 
@@ -146,6 +168,45 @@ contract TraderNFT is ERC721, ITraderNFT {
     /// reads it on every trade and turns it into a minimum interval.
     function cadenceOf(uint256 tokenId) external view returns (uint8) {
         return _genomes[tokenId].cadence;
+    }
+
+    /// @notice Revise the brain: append a generation with a new commitment
+    /// (and model). Owner-only. The old generation's trades stay attributed to
+    /// it; the new one is in training camp until the guard has seen enough
+    /// own-book trades under it and the notice period has passed. Sealed
+    /// brains publish the new jar alongside.
+    function revise(uint256 tokenId, bytes32 commitment, string calldata model, string calldata encryptedPromptCID) external {
+        require(msg.sender == ownerOf(tokenId), "Trader: not owner");
+        require(commitment != bytes32(0), "Trader: empty commitment");
+        require(commitment != _genomes[tokenId].commitment, "Trader: same genome");
+        Genome storage g = _genomes[tokenId];
+        g.commitment = commitment;
+        g.model = model;
+        g.encryptedPromptCID = encryptedPromptCID;
+        _generations[tokenId].push(Generation(commitment, model, encryptedPromptCID, uint64(block.number), uint64(block.timestamp)));
+        emit GenomeRevised(tokenId, uint32(_generations[tokenId].length - 1), commitment, model);
+    }
+
+    /// @notice The current generation index (0 = born with).
+    function generationOf(uint256 tokenId) public view returns (uint32) {
+        uint256 n = _generations[tokenId].length;
+        return n == 0 ? 0 : uint32(n - 1);
+    }
+
+    /// @notice When a generation became current (0 for an unknown generation).
+    function generationSince(uint256 tokenId, uint32 generation) external view returns (uint64) {
+        Generation[] storage gs = _generations[tokenId];
+        return generation < gs.length ? gs[generation].sinceTime : 0;
+    }
+
+    /// @notice The full record of a generation: for attributing trades and for buyers.
+    function generationAt(uint256 tokenId, uint32 generation)
+        external
+        view
+        returns (bytes32 commitment, string memory model, string memory encryptedPromptCID, uint64 sinceBlock, uint64 sinceTime)
+    {
+        Generation storage gen = _generations[tokenId][generation];
+        return (gen.commitment, gen.model, gen.encryptedPromptCID, gen.sinceBlock, gen.sinceTime);
     }
 
     /// @notice Give a brain its name. Owner-only, once, at most 32 bytes.
@@ -192,6 +253,7 @@ contract TraderNFT is ERC721, ITraderNFT {
             '{"trait_type":"Seat","value":"', tiers[tier < 3 ? tier : 0], '"},',
             '{"trait_type":"Cadence (per day)","value":', Strings.toString(g.cadence), '},',
             '{"trait_type":"Model","value":"', g.model, '"},',
+            '{"trait_type":"Generation","value":', Strings.toString(generationOf(tokenId)), '},',
             '{"trait_type":"Birth block","value":', Strings.toString(g.birthBlock), '}]}'
         );
         return string.concat("data:application/json;base64,", Base64.encode(bytes(json)));

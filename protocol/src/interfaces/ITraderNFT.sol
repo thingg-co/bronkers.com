@@ -8,6 +8,10 @@ interface ITraderNFT {
     /// @notice Declared max trades per day (public trait, >= 1). The guard
     /// enforces it as a floor under the owner's minTradeInterval.
     function cadenceOf(uint256 tokenId) external view returns (uint8);
+    /// @notice The current genome generation (0 = the mint genome) and when a
+    /// generation became current; the guard keys its training camp on them.
+    function generationOf(uint256 tokenId) external view returns (uint32);
+    function generationSince(uint256 tokenId, uint32 generation) external view returns (uint64);
 }
 
 /// @notice What the guard asks the RuntimeRegistry: is this executor key

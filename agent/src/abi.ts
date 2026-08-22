@@ -9,7 +9,12 @@ export const traderNftAbi = parseAbi([
   "function nameOf(uint256 tokenId) view returns (string)",
   "function cadenceOf(uint256 tokenId) view returns (uint8)",
   "function nextId() view returns (uint256)",
+  "function revise(uint256 tokenId, bytes32 commitment, string model, string encryptedPromptCID)",
+  "function generationOf(uint256 tokenId) view returns (uint32)",
+  "function generationSince(uint256 tokenId, uint32 generation) view returns (uint64)",
+  "function generationAt(uint256 tokenId, uint32 generation) view returns (bytes32 commitment, string model, string encryptedPromptCID, uint64 sinceBlock, uint64 sinceTime)",
   "event EnvelopePublished(uint256 indexed tokenId, bytes envelope)",
+  "event GenomeRevised(uint256 indexed tokenId, uint32 generation, bytes32 commitment, string model)",
 ]);
 
 export const guardAbi = parseAbi([
@@ -31,6 +36,8 @@ export const guardAbi = parseAbi([
   "function cadenceIntervalOf(uint256 tokenId) view returns (uint64)",
   "function tradeIntervalOf(uint256 tokenId) view returns (uint64)",
   "function nextTradeAt(uint256 tokenId) view returns (uint64)",
+  "function campStatus(uint256 tokenId) view returns (uint32 generation, bool inCamp, uint32 trades, uint32 minTrades, uint64 vaultFrom)",
+  "function campDone(uint256 tokenId, uint32 generation) view returns (bool)",
   "event TradeExecuted(uint256 indexed tokenId, address indexed venue, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut, bool fromVault)",
   "event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee)",
   "event RuntimeFeeSet(uint256 indexed tokenId, uint256 fee)",

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Seed a RUNNING anvil with a small, varied roster for Terminal development:
 #   #1 Umbra    sealed-generated, seasoned, LP-funded, several vault trades
-#   #2 Nocturne sealed-authored, seasoned (one own-book trade), open to deposits
+#   #2 Nocturne sealed-authored, seasoned (one own-book trade), open to deposits,
+#               then revised once: generation 1, in training camp
 #   #3 (unnamed) authored, still an intern, no trades
 # plus a prepaid machine lease on the mock Oyster market for the farm to keep
 # topped up from its fee income. Leaves the chain up. Start anvil first:
@@ -109,6 +110,13 @@ fund_and_authorise_tba 2 500ether
 tick 2 ./genome.dev2.json --own-book
 VAULT2=$(call $NFT "vaultOf(uint256)(address)" 2)
 send --private-key $OWNER_KEY $VAULT2 "setAllowlistEnabled(bool)" false
+# …then trained once: a second generation, sealed and published, now in camp (it spars on its own book first)
+G2b=$(cd agent && ENCLAVE_PUBLIC_KEY="$ENCLAVE_PUB" npm run --silent genome -- seal \
+  "You are a patient mean-reversion trader. Buy weakness, sell strength, size small. Coach's note 1: hold longer; size smaller after two losses in a row." '{"style":"mean-reversion","revisions":[{"n":1,"brief":"hold longer; size smaller after two losses in a row"}]}' ./genome.dev2b.json)
+C2b=$(echo "$G2b" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
+publish 2 genome.dev2b.json
+send --private-key $OWNER_KEY $NFT "revise(uint256,bytes32,string,string)" 2 "$C2b" "claude-sonnet-5" "onchain:EnvelopePublished"
+echo "   Nocturne: generation $(call $NFT "generationOf(uint256)(uint32)" 2), in camp"
 
 echo "── brain #3: authored, intern, no trades, unnamed ──"
 G3=$(cd agent && npm run --silent genome -- author \

@@ -17,6 +17,8 @@ const REVERTS = [
   [/Guard: not an upgrade/, "Seats only go up. This brain already holds that tier or higher."],
   [/Guard: exceeds tier/, "That limit is above what this brain's seat allows."],
   [/Guard: token not curated|Guard: venue not curated/, "Only protocol-curated markets can be enabled."],
+  [/Guard: in camp/, "This generation is still in training camp: it has to spar on the brain's own wallet (and wait out the notice period) before it may trade the vault."],
+  [/Trader: same genome/, "That is the genome the brain already has."],
   [/ERC20InsufficientAllowance|insufficient allowance/i, "The token approval is too small. Approve first."],
   [/ERC20InsufficientBalance|transfer amount exceeds balance|insufficient balance/i, "Not enough balance for that amount."],
   [/ERC4626ExceededMaxWithdraw|ERC4626ExceededMaxRedeem/, "That is more than your position in this vault."],
@@ -157,6 +159,20 @@ export async function composeWithEnclave(brief, tweaks) {
   const url = (state.cfg.enclaveUrl || "").replace(/\/$/, "");
   if (!url) throw new Error("No enclave endpoint is configured for this chain (Developer tab).");
   const res = await fetch(`${url}/compose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brief, tweaks: tweaks || {} }) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `enclave returned ${res.status}`);
+  if (!json.commitment || !json.envelope) throw new Error("enclave returned an incomplete answer");
+  return json;
+}
+
+/** Append a generation: a new commitment (and model) the brain will trade under once it has sparred. */
+export const revise = (id, commitment, model, cid) => [{ label: `Revise brain #${id}: commit the next generation`, run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "revise", args: [BigInt(id), commitment, model, cid] }) }];
+
+/** Coach a sealed brain: the enclave appends the note to the current genome, seals the next generation, and returns only the commitment and the ciphertext. */
+export async function trainWithEnclave(id, brief) {
+  const url = (state.cfg.enclaveUrl || "").replace(/\/$/, "");
+  if (!url) throw new Error("No enclave endpoint is configured for this chain (Developer tab).");
+  const res = await fetch(`${url}/train`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tokenId: Number(id), brief }) });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `enclave returned ${res.status}`);
   if (!json.commitment || !json.envelope) throw new Error("enclave returned an incomplete answer");

@@ -18,7 +18,7 @@ It is organised around four jobs:
 |---|---|---|
 | **The Floor** | anyone, no wallet needed | every brain, live, sortable by return / NAV / trades / age / bell reward; filter to open vaults, interns, yours, or bells worth ringing |
 | **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → start. Sealed custody by default, entirely in the browser; the last step publishes the jar on-chain, seeds the wallet, authorises the guard, sets the runtime fee and enrols the brain with the enclave, so it is trading before you leave the page |
-| **My Desk** | owners, depositors, keepers | manage the brains you own (including their runtime fee and their account with the enclave), see your vault positions, ring bells that pay |
+| **My Desk** | owners, depositors, keepers | manage the brains you own (runtime fee, the account with the enclave, and **Training**: revise the brain into a new generation), see your vault positions, ring bells that pay |
 | **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, levers to move the mock market and the chain's clock, the farm's books, the runtime command |
 
 Clicking a brain opens its page: share-price return since inception, vault NAV,
@@ -74,6 +74,16 @@ income, cost breakdown, net, the lease (time left, rate, paid so far). Both
 degrade to a sentence when the endpoint is not there; nothing on-chain depends
 on them.
 
+**Brains train between fights.** My Desk's Training panel revises a brain:
+sealed-generated brains take a coach's note (`POST enclaveUrl/train`: the
+enclave appends it to the current sealed prompt and returns the next
+generation's commitment and jar), sealed-authored brains take a new prompt
+sealed in the tab, authored brains take a new prompt encrypted with a key you
+keep; the steps publish the jar and call `revise`. The brain page shows the
+generation, a training-camp panel while the new generation spars on the own
+book, the generation of every trade, and the revision timeline; the Floor
+badges brains in camp.
+
 **Before you sign, you are told what happens.** The deposit modal shows the
 share price, estimated shares and the fee terms; the bell modal shows the
 pending management and performance fees and your 1% cut before you ring (via
@@ -126,6 +136,9 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol` and
 - `TraderNFT.cadenceOf`, `ExecutionGuard.cadenceIntervalOf / tradeIntervalOf /
   nextTradeAt` — the declared cadence and the interval the guard enforces
   between trades (owner's `minTradeInterval` floored at 1 day / cadence).
+- `TraderNFT.revise / generationOf / generationAt` and `GenomeRevised`,
+  `ExecutionGuard.campStatus / campDone` — generations and the training camp;
+  trades are attributed to generations by block.
 - `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee /
   pendingRuntimeFeeOf / runtimeFeeDelay / minFeeNotionalBps / registry` and the
   `RuntimeFeePaid` / `RuntimeFeeScheduled` events — the per-trade reimbursement a

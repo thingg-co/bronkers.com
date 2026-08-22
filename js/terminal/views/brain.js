@@ -17,7 +17,7 @@ function tradesTable(brain) {
     el("tr", {},
       el("td", { title: fmt.date(t.ts) }, fmt.when(t.ts)),
       el("td", {}, (() => { const d = describeVenueTrade(t); return [d.text, d.detail ? el("span", { class: "muted small" }, " · ", d.detail) : null]; })()),
-      el("td", {}, badge(t.fromVault ? "vault" : "own book", t.fromVault ? "accent" : "muted"), t.transcript ? [" ", el("span", { class: "badge muted", title: `The runtime committed the hash of the inference transcript behind this trade: ${t.transcript}` }, "transcript")] : null),
+      el("td", {}, badge(t.fromVault ? "vault" : "own book", t.fromVault ? "accent" : "muted"), brain.revisions && brain.revisions.length ? [" ", el("span", { class: "badge muted", title: "The genome generation this trade was made under" }, `gen ${t.generation || 0}`)] : null, t.transcript ? [" ", el("span", { class: "badge muted", title: `The runtime committed the hash of the inference transcript behind this trade: ${t.transcript}` }, "transcript")] : null),
       el("td", { class: "mono" }, t.hash ? (explorerAddr(t.hash) ? el("a", { href: `${state.cfg.explorer}/tx/${t.hash}`, target: "_blank", rel: "noopener" }, fmt.hash(t.hash)) : fmt.hash(t.hash)) : `block ${t.block}`)));
   return el("div", { class: "tablewrap" }, el("table", { class: "table trades" },
     el("thead", {}, el("tr", {}, el("th", {}, "When"), el("th", {}, "Trade"), el("th", {}, "Book"), el("th", {}, "Tx"))),
@@ -37,6 +37,18 @@ function chart(brain) {
       vals.length > 1 ? el("span", { class: `chart-delta ${last >= first ? "up" : "down"}` }, hasLp ? fmt.pct(last / first - 1) : `${fmt.num(first)} → ${fmt.num(last)}`) : null),
     vals.length > 1 ? sparkline(vals, { width: 640, height: 120, cls: "large" }) : el("p", { class: "muted" }, "Not enough history to chart yet."),
     series.length > 1 ? el("div", { class: "chart-axis" }, el("span", {}, fmt.when(series[0].ts)), el("span", {}, "now")) : null);
+}
+
+/** A revised generation spars on the own book before it may trade the vault. */
+function camp(brain) {
+  if (!brain.inCamp || !brain.camp) return null;
+  const now = brain.runtime ? brain.runtime.now : Math.floor(Date.now() / 1000);
+  const wait = brain.camp.vaultFrom > now ? brain.camp.vaultFrom - now : 0;
+  return el("div", { class: "panel" },
+    el("h4", {}, `Training camp · generation ${brain.generation}`),
+    el("p", { class: "muted" }, "The brain was revised. The new generation trades the brain's own wallet first; the vault waits until it has sparred ",
+      el("strong", {}, `${brain.camp.minTrades} trade${brain.camp.minTrades === 1 ? "" : "s"}`), wait ? [" and the notice period has passed (", el("strong", {}, fmt.duration(wait)), " to go)"] : null, ". Depositors can withdraw at any time; the high-water mark carries over."),
+    progress(brain.camp.minTrades ? brain.camp.trades / brain.camp.minTrades : 1, `${brain.camp.trades} / ${brain.camp.minTrades} own-book trades`));
 }
 
 function internship(brain) {
@@ -172,7 +184,8 @@ function identity(brain) {
       executor != null ? ["Executor", executor && executor !== "0x0000000000000000000000000000000000000000" ? addrChip(executor, { explorer: ex }) : badge("not set", "muted"), "The hot key that signs trades. It can only call executeTrade."] : null,
       brain.genome.custody !== 0 ? ["Sealed jar", brain.envelopePublished ? "published on-chain (ciphertext)" : "not published", "The encrypted genome; only the enclave key opens it."] : null,
       ["Custody", [c.label, " — ", el("span", { class: "muted" }, c.blurb)]],
-      ["Genome commitment", el("span", { class: "mono small" }, brain.genome.commitment)],
+      ["Genome commitment", el("span", { class: "mono small" }, brain.genome.commitment), brain.revisions && brain.revisions.length ? "The current generation's commitment. Earlier generations are listed below; each trade is attributed to the one that made it." : "The strategy committed at birth. The owner may revise it into a new generation; trades stay attributed to the generation that made them."],
+      brain.revisions && brain.revisions.length ? ["Generations", el("ul", { class: "plain small" }, [el("li", {}, `0 · born at block ${brain.genome.birthBlock}`), ...brain.revisions.map((r) => el("li", {}, `${r.generation} · revised at block ${r.block} · ${r.model} · `, el("span", { class: "mono" }, `${r.commitment.slice(0, 10)}…`)))]), "Every revision is committed before it trades; the camp keeps a new generation off the vault until it has sparred."] : null,
       ["Model", brain.genome.model],
       ["Declared cadence", `${brain.genome.cadence} trades / day · enforced on-chain: one trade every ${fmt.duration(brain.tradeInterval || Math.floor(86400 / Math.max(1, brain.genome.cadence)))}${brain.nextTradeAt && brain.runtime && brain.nextTradeAt > brain.runtime.now ? ` · next allowed in about ${fmt.duration(brain.nextTradeAt - brain.runtime.now)}` : ""}`, "A public trait the guard enforces as a minimum interval between trades. The owner may tighten it, never loosen it."],
       ["Risk profile", RISK[brain.genome.riskProfile] || String(brain.genome.riskProfile)],
@@ -213,7 +226,7 @@ export async function render(root, { id }) {
       jar(brain),
       el("div", { class: "brain-title" },
         el("h2", {}, brain.label, " ", el("span", { class: "tier-chip" }, TIERS[brain.tier])),
-        el("p", { class: "card-badges" }, statusBadge(brain), custodyBadge(brain), brain.mine ? badge("yours", "accent") : null, brain.snapshot ? badge("snapshot", "muted") : null),
+        el("p", { class: "card-badges" }, statusBadge(brain), custodyBadge(brain), brain.generation ? badge(`generation ${brain.generation}`, "muted") : null, brain.mine ? badge("yours", "accent") : null, brain.snapshot ? badge("snapshot", "muted") : null),
         el("p", { class: "muted" }, "Owned by ", addrChip(brain.owner, { explorer: state.cfg.explorer }), isMe(brain.owner) ? " (you)" : ""))),
     el("div", { class: "stat-grid" },
       stat("Share price return", brain.supply > 0n ? fmt.pct(brain.sharePriceReturn) : "–", brain.supply > 0n ? "since inception" : "no outside capital yet"),
@@ -223,6 +236,7 @@ export async function render(root, { id }) {
       stat("Max drawdown", brain.series.length > 1 ? fmt.pct(-brain.drawdown, 1) : "–", "share price, trade-to-trade")),
     chart(brain),
     internship(brain),
+    camp(brain),
     actionsPanel(brain, refresh),
     el("h3", { class: "section-sub" }, "Track record"),
     el("p", { class: "muted" }, "Every row is a ", el("code", {}, "TradeExecuted"), " event from the guard. Recompute it yourself; this page only summarises.", brain.transcripts ? ` ${brain.transcripts} of ${brain.trades.length} trades carry a transcript hash: the runtime's evidence of what the model saw and decided, checkable against a disclosed transcript.` : ""),

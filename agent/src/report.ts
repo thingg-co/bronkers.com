@@ -14,6 +14,7 @@ const WAD = 10n ** 18n;
 const extraNftAbi = parseAbi([
   "function nextId() view returns (uint256)",
   "function nameOf(uint256) view returns (string)",
+  "function generationOf(uint256) view returns (uint32)",
 ]);
 const extraGuardAbi = parseAbi(["function tierOf(uint256) view returns (uint8)"]);
 const extraVaultAbi = parseAbi(["function convertToAssets(uint256) view returns (uint256)"]);
@@ -41,13 +42,14 @@ async function tsOf(block: bigint): Promise<number> {
 const nextId = await publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "nextId" });
 const traders = [];
 for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
-  const [genome, owner, vault, account, name, tier] = await Promise.all([
+  const [genome, owner, vault, account, name, tier, generation] = await Promise.all([
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "genomeOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "ownerOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "vaultOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "accountOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "nameOf", args: [tokenId] }),
     publicClient.readContract({ address: guard, abi: extraGuardAbi, functionName: "tierOf", args: [tokenId] }),
+    publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "generationOf", args: [tokenId] }),
   ]);
   const [nav, pps, seasoned, logs, feeLogs, runtimeFee] = await Promise.all([
     publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "totalAssets" }),
@@ -78,6 +80,7 @@ for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
     account,
     vault,
     commitment: genome.commitment,
+    generation: Number(generation),
     birthBlock: Number(genome.birthBlock),
     model: genome.model,
     riskProfile: genome.riskProfile,

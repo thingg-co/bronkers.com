@@ -70,9 +70,17 @@ struct Genome {
 ```
 
 - `mint(commitment, riskProfile, cadence, custody, model, cid, universe, mgmtBps, perfBps)`
-  — stores the genome record, deploys the token's TBA via the 6551 registry, deploys
-  the token's `TraderVault`, registers default guard policy, emits `TraderBorn`.
-  Requires `cadence >= 1` (the guard divides a day by it).
+  — stores the genome record as generation 0, deploys the token's TBA via the 6551
+  registry, deploys the token's `TraderVault`, registers default guard policy, emits
+  `TraderBorn`. Requires `cadence >= 1` (the guard divides a day by it).
+- **Generations.** `revise(id, commitment, model, cid)` (owner-only) appends a
+  generation: the current `Genome` takes the new commitment and model, the old one is
+  kept in `generationAt(id, n)` with the block and time it became current, and
+  `GenomeRevised` is emitted. Public traits (risk, cadence, custody) and the birth block
+  belong to the token and never change. Every trade is attributable to exactly one
+  generation (the one current at its block), nothing is backfilled, and a revision is
+  always committed before it trades; `generationOf(id)` is the current index and
+  `tokenURI` carries it as a trait.
 - `MAX_SUPPLY = 4096` — the collection is hard-capped ("one brain per bit"); mint
   reverts once `nextId` reaches it.
 - `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)`,
@@ -86,7 +94,9 @@ struct Genome {
   sealed jar by scanning logs. Re-publishable; the commitment never changes.
 - `_update()` override — checkpoints the vault's fee accrual before every transfer, so
   accrued-but-unminted fees are crystallized under the seller's watch.
-- **No genome mutation path exists.** Immutability = provenance.
+- **Genomes are immutable per generation.** There is no path that changes what a past
+  trade was made under; `revise` only appends. Provenance = every epoch of the record is
+  tied to a commitment made before it began.
 
 ### 2.2 ExecutionGuard.sol (singleton, keyed by tokenId)
 
@@ -112,6 +122,14 @@ ceilings; deployer-tunable via `setTier`) bound each trader's `maxNotionalBps`.
 `activate(tokenId, tier)` is owner-only, upgrade-only, and pulls the tier's one-time
 fee in the base asset to the protocol `treasury`; `setPolicy` clamps to the seat's
 ceiling. Everyone mints as an Intern.
+
+**Training camp.** A revised generation (`generationOf > 0`) may trade the own book at
+once but the vault only after `campMinTrades` own-book trades under that generation
+(`campTradesOf[id][gen]`) and `revisionNotice` seconds since it was committed
+(`campDone`, `campStatus`; `setCamp` is deployer-level, one spar and no notice locally, a
+day on public testnets). `executeTrade` with `fromVault` reverts "Guard: in camp" until
+then. The high-water mark lives in the vault and is untouched by revisions, so revising
+can never reset fees. The mint genome's camp is the paper season.
 
 **Declared cadence, enforced.** `cadenceIntervalOf(id) = 1 day / nft.cadenceOf(id)`;
 `tradeIntervalOf(id) = max(minTradeInterval, cadenceIntervalOf)`; `executeTrade`
@@ -251,6 +269,14 @@ sealed (1, 2):
   sale: nothing to hand off — the sealed blob and the enclave stay put; exclusivity is total
 
 every run: unseal/decrypt ─▶ recompute hash ─▶ MUST equal on-chain commitment, else refuse
+
+training (generations):
+  authored (0):  owner writes the next prompt ─▶ new authored envelope + key ─▶ revise(commitment)
+  sealed (1):    owner writes the next prompt ─▶ sealed in the browser ─▶ publishEnvelope ─▶ revise
+  sealed (2):    owner writes a coach's note ─▶ farm /train opens the current jar INSIDE the
+                 enclave, appends the note, seals generation n+1 ─▶ {commitment, envelope}
+                 ─▶ publishEnvelope ─▶ revise         (still no human has read the prompt)
+  the new generation spars on the own book (camp) before it may trade the vault
 ```
 
 - **Canonicalization is frozen**: UTF-8, sorted keys, no insignificant whitespace
@@ -305,9 +331,14 @@ goes through `executeTradeWithTranscript` with the keccak256 of the inference tr
 prompt is not in it), and the transcript is kept under its hash in `FARM_TRANSCRIPTS_DIR`
 so a disclosure can be checked against the chain. At start the farm says whether its key
 is attested, because the guard pays fees only to attested executors. Book
-selection: own wallet while unseasoned, vault once seasoned and funded, idle if neither
-holds funds or the wallet has not approved the guard. No protocol state of its own: it
-resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via `npm
+selection: own wallet while unseasoned or while the current generation is in camp
+(`campStatus`), vault once seasoned, out of camp and funded, idle if neither holds funds
+or the wallet has not approved the guard. When a brain's commitment changes (`revise`) the
+farm drops it and re-enrols against the latest published jar, verifying it against the new
+commitment. `POST /train {tokenId, brief}` coaches a sealed brain in-enclave
+(`composeRevision`: the note is appended to the current prompt and the revision list kept
+in the tweaks) and returns `{commitment, envelope, generation}`. No protocol state of its
+own: it resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via `npm
 run loop`). Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
 `FARM_POLL_SECONDS`, `FARM_MIN_FEE` (refuse brains paying less), `FARM_HTTP_PORT` (the
 enclave endpoint: `GET /health`, `GET /ledger[?tokenId=]`, `POST /compose {brief,
@@ -392,6 +423,7 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Executor churns trades to farm the runtime fee | fee capped per trade, trades rate-limited on-chain to the declared cadence (at most cadence × cap a day), and no fee on trades under `minFeeNotionalBps` of NAV | same |
 | Operator paid for work it did not do (wrong model, no model) | fee paid only to an executor the registry marks attested; each trade carries the transcript hash for audit | hardware-attested registration through the DCAP adapter; transcripts disclosed on request |
 | Fee raised on depositors without notice | raises take effect after `runtimeFeeDelay`; lowering is immediate | same, with a longer period |
+| Strategy swapped under depositors' money | a revision is committed before it trades, spars `campMinTrades` own-book trades and waits `revisionNotice` before the vault; trades stay attributed to their generation; HWM carries | same, longer notice |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
 | NFT deposited into own TBA (ownership cycle) | blocked: TBA cannot receive its own collection | same |
 | Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
@@ -405,8 +437,10 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 - LP protections when the NFT changes hands (withdrawal window? executor-change
   timelock with notice?). Prototype: none; v2 recommendation: timelocked executor
   change.
-- Genome rotation on sale (privacy) vs. hash immutability (provenance) — currently
-  resolved in favor of provenance.
+- Genome rotation on sale (privacy) vs. hash immutability (provenance) — resolved
+  (Aug 2026) by generations: immutability per epoch, revisions committed before they
+  trade, a training camp before the vault. Whether a sale should force (or forbid) a
+  revision is still open.
 - Cadence enforcement: resolved (Aug 2026) in favour of enforcing the declared trait
   on-chain as a floor under the owner's interval, which is what the paper promised and
   what bounds the runtime fee per day.

@@ -83,7 +83,7 @@ export async function seasonParams() {
 export async function summary(id) {
   id = BigInt(id);
   const { traderNFT, guard } = state.cfg;
-  const [genome, owner, name, vault, tba, tier, seasoned, tradeCount, firstTradeAt] = await Promise.all([
+  const [genome, owner, name, vault, tba, tier, seasoned, tradeCount, firstTradeAt, camp] = await Promise.all([
     read(traderNFT, nftAbi, "genomeOf", [id]),
     read(traderNFT, nftAbi, "ownerOf", [id]),
     read(traderNFT, nftAbi, "nameOf", [id]),
@@ -93,6 +93,7 @@ export async function summary(id) {
     read(guard, guardAbi, "seasoned", [id]),
     read(guard, guardAbi, "tradeCountOf", [id]),
     read(guard, guardAbi, "firstTradeAt", [id]),
+    read(guard, guardAbi, "campStatus", [id]).catch(() => [0, false, 0, 0, 0n]),
   ]);
   const me = state.account;
   const [nav, supply, pps, tbaNav, pending, myShares] = await Promise.all([
@@ -117,6 +118,10 @@ export async function summary(id) {
     tradeCount: Number(tradeCount),
     firstTradeAt: Number(firstTradeAt),
     season,
+    // generations: the current one, and whether it is still sparring on the own book
+    generation: Number(camp[0]),
+    inCamp: Boolean(camp[1]),
+    camp: { trades: Number(camp[2]), minTrades: Number(camp[3]), vaultFrom: Number(camp[4]) },
     nav,
     supply,
     pps, // assets per 1e18 shares
@@ -271,6 +276,14 @@ export async function loadBrain(id, { force } = {}) {
   ]);
   const transcriptByTx = new Map(transcriptLogs.map((l) => [l.transactionHash, l.args.transcript]));
   for (const t of trades) t.transcript = transcriptByTx.get(t.hash) || null;
+  // generations: every trade belongs to the generation that was current at its block
+  const revisionLogs = await state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "GenomeRevised", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []);
+  const revisions = revisionLogs.map((l) => ({ generation: Number(l.args.generation), commitment: l.args.commitment, model: l.args.model, block: Number(l.blockNumber), hash: l.transactionHash }));
+  for (const t of trades) {
+    let gen = 0;
+    for (const r of revisions) if (t.block >= r.block) gen = r.generation;
+    t.generation = gen;
+  }
   const runtime = runtimeStatus(policy[0], Number(policy[4]), b, now, Number(tradeInterval));
   if (state.cfg.registry && runtime.kind !== "none") {
     try {
@@ -320,6 +333,7 @@ export async function loadBrain(id, { force } = {}) {
     minFeeNotionalBps: Number(minFeeNotionalBps),
     feesGated: String(feeRegistry).toLowerCase() !== "0x0000000000000000000000000000000000000000",
     transcripts: transcriptLogs.length,
+    revisions,
     runtimeFeesPaid: feeLogs.reduce((s, l) => s + (l.args.fee ?? 0n), 0n),
     runtimeFeePayments: feeLogs.length,
     token,

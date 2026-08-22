@@ -23,7 +23,7 @@ cd agent && npm install && cd ..
 ## 1. Make sure it all passes
 
 ```bash
-cd protocol && forge test && cd ..      # 60 tests: guard, vault, fees, tiers, season, runtime, registry, hosting
+cd protocol && forge test && cd ..      # 69 tests: guard, vault, fees, tiers, season, runtime, registry, hosting, generations
 cd agent && npm run typecheck && npm test && cd ..   # ledger, lease and bridge arithmetic
 ```
 
@@ -40,7 +40,8 @@ contract addresses and the dev enclave key into `js/config.js`, and the
 enclave keys into `agent/.dev-enclave.env`.
 
 What it left on the chain: Umbra (sealed-generated, seasoned, LP-funded, five
-hourly trades), Nocturne (sealed-authored, seasoned, open to deposits), an
+hourly trades), Nocturne (sealed-authored, seasoned, open to deposits, revised
+once so its second generation is in training camp), an
 unnamed authored intern, and a prepaid two-hour job on the mock machine
 market for the farm to keep topped up.
 
@@ -99,6 +100,11 @@ on the dev deployment) its vault opens to depositors.
 
 Authored custody instead: you keep the key; run the brain yourself with the
 command the wizard prints (`npm run loop`).
+
+**Train it.** My Desk → Training: a sealed-generated brain takes a coach's
+note (the enclave applies it inside the jar), a sealed-authored one a new
+prompt sealed in the tab. The new generation spars on the brain's wallet first
+("in camp" on the Floor); Nocturne is seeded that way so you can watch it.
 
 ## 6. The one-shot demo
 

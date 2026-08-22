@@ -60,6 +60,12 @@ it is linked.
 - [ ] **Realized-only performance fees.**
 - [ ] **Buyback/AMM floor pool** in the base asset (no native token, no burns,
       no distributions).
+- [ ] **Sealed training by model call.** `/train` appends a coach's note to the
+      sealed prompt (deterministic). Production should rewrite the prompt with a
+      model call inside the TEE; same outputs (commitment, jar).
+- [ ] **Revision on sale.** Decide whether a transfer should force a new
+      generation (a buyer's own strategy) or forbid one for a period (a buyer
+      paid for the record); today neither.
 - [ ] **Decide: fee on hold ticks?** Today the fee is paid on trades only (the
       executor's permission set stays one function) and the farm's credit
       policy absorbs holds. A per-tick fee would be a second executor entry
