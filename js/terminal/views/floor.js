@@ -3,6 +3,7 @@ import { CUSTODY, TIERS } from "../abi.js";
 import { state } from "../chain.js";
 import { loadRoster, loadSnapshot, loadTrades, navSeries, ringable } from "../data.js";
 import { badge, clear, el, emptyState, fmt, progress, sparkline, spinner } from "../ui.js";
+import { earnedCount, total } from "../achievements.js";
 
 const SORTS = {
   return: { label: "Return", fn: (a, b) => b.sharePriceReturn - a.sharePriceReturn },
@@ -54,11 +55,13 @@ function returnBadge(b) {
   return el("span", { class: `pnl-badge ${r >= 0 ? "pnl-up" : "pnl-down"}`, title: "Vault share price since inception" }, fmt.pct(r));
 }
 
-export function card(b) {
-  const c = el("a", { class: "feature-card trader-card brain-card", href: `#/brain/${b.id}` },
+const MEDALS = ["🥇", "🥈", "🥉"];
+export function card(b, rank) {
+  const c = el("a", { class: `feature-card trader-card brain-card${rank === 1 ? " leader" : ""}`, href: `#/brain/${b.id}` },
+    rank ? el("span", { class: `rank-chip${rank <= 3 ? " medal" : ""}`, title: `Rank ${rank}` }, rank <= 3 ? MEDALS[rank - 1] : `#${rank}`) : null,
     jar(b),
     el("div", { class: "trader-head" }, el("h3", {}, b.label), el("span", { class: "tier-chip" }, TIERS[b.tier])),
-    el("p", { class: "card-badges" }, returnBadge(b), statusBadge(b), custodyBadge(b), b.mine ? badge("yours", "accent") : null),
+    el("p", { class: "card-badges" }, returnBadge(b), statusBadge(b), custodyBadge(b), b.mine ? badge("yours", "accent") : null, el("span", { class: "badge muted", title: "Milestones earned" }, `🏅 ${earnedCount(b)}/${total(b)}`)),
     el("div", { class: "card-spark" }),
     el("dl", { class: "trader-stats" },
       el("div", {}, el("dt", {}, "Vault NAV"), el("dd", { class: "stat-inline" }, fmt.amt(b.nav))),
@@ -115,9 +118,10 @@ export async function render(root) {
   const filterSel = el("select", { class: "select", onchange: (e) => { prefs.filter = e.target.value; localStorage.setItem("brokners-floor-filter", prefs.filter); draw(); } },
     [["all", "All brains"], ["open", "Taking deposits"], ["intern", "Interns"], ["mine", "Mine"], ["bell", "Bell worth ringing"], ["reapable", "Dead (reapable)"]].map(([k, l]) => el("option", { value: k, selected: prefs.filter === k }, l)));
   head.append(
+    el("h3", { class: "leaderboard-title" }, "The Floor", el("span", { class: "muted" }, " — the standings")),
     el("p", { class: "roster-note" }, note),
     el("div", { class: "toolbar" },
-      el("label", { class: "toolbar-item" }, "Sort ", sortSel),
+      el("label", { class: "toolbar-item" }, "Rank by ", sortSel),
       el("label", { class: "toolbar-item" }, "Show ", filterSel)));
 
   function draw() {
@@ -136,11 +140,11 @@ export async function render(root) {
         brains.length ? null : el("a", { class: "btn primary", href: "#/create" }, "Birth a brain")));
       return;
     }
-    for (const b of list) {
-      const c = card(b);
+    list.forEach((b, i) => {
+      const c = card(b, i + 1);
       grid.append(c);
       lazySparkline(b, c.querySelector(".card-spark"));
-    }
+    });
   }
   draw();
 }

@@ -5,7 +5,7 @@ import { decodeEventLog, encodeFunctionData, maxUint256, parseUnits, stringToHex
 import { erc20Abi, guardAbi, nftAbi, tbaAbi, vaultAbi } from "./abi.js";
 import { explorerTx, state } from "./chain.js";
 import { invalidate } from "./data.js";
-import { el, modal, toast } from "./ui.js";
+import { celebrate, el, modal, toast } from "./ui.js";
 
 const REVERTS = [
   [/Vault: trader not seasoned/, "This brain is still an intern. It cannot take outside money until it finishes its paper season on its own book."],
@@ -85,6 +85,7 @@ export async function runSteps(title, steps, { summary, onDone } = {}) {
   m.setActions([{ label: ok ? "Done" : "Close", kind: ok ? "primary" : "", onClick: () => { m.close(); onDone && onDone(ok); } }]);
   if (ok) {
     toast(`${title}: done`, "ok");
+    celebrate();
     setTimeout(() => { m.close(); onDone && onDone(true); }, 1200);
   }
   return ok;

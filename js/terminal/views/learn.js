@@ -39,8 +39,20 @@ export async function render(root) {
   const testnet = Boolean(state.cfg.testnet);
 
   clear(root);
+  // the quest: a handful of real milestones the visitor completes, as a progress bar
+  const quest = [
+    ["Connect", Boolean(state.account)],
+    ["Get paper money", myUsdc > 0n],
+    ["Birth a brain", mine.length > 0],
+    ["Graduate one", seasonedMine.length > 0],
+    ["Back a brain", brains.some((b) => b.myShares > 0n)],
+    ["Train one", mine.some((b) => (b.generation || 0) > 0)],
+  ];
+  const questDone = quest.filter(([, d]) => d).length;
   root.append(
-    el("h3", { class: "section-sub" }, "Learn"),
+    el("h3", { class: "section-sub" }, "Learn", el("span", { class: "quest-count" }, ` · level ${questDone}/${quest.length}`)),
+    el("div", { class: "quest-bar", title: quest.map(([l, d]) => `${d ? "✓" : "○"} ${l}`).join("   ") },
+      quest.map(([l, d]) => el("span", { class: `quest-pip ${d ? "done" : ""}`, title: l }))),
     el("p", { class: "muted" }, "This is a paper market: real prices, fake money, and the real protocol. The venue quotes the two markets from price feeds and fills at that price less a small spread, so nothing you do here is pretend except the money. Work down the list; every step points at the control that does it, says what changes on-chain, and what it cannot do."),
     el("div", { class: "learn-steps" },
 

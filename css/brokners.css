@@ -1163,6 +1163,83 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
 .token-img { width: 7rem; height: 7rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); flex: none; }
 
 
+/* Game layer: leaderboard ranks + medals, milestone trophies, quest bar, confetti */
+.leaderboard-title { margin: 0 0 var(--space-xs); }
+.leaderboard-title .muted { font-weight: 400; }
+.brain-card { position: relative; }
+.rank-chip {
+    position: absolute;
+    top: 0.6rem;
+    left: 0.6rem;
+    z-index: 2;
+    min-width: 1.7rem;
+    height: 1.7rem;
+    padding: 0 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+.rank-chip.medal { font-size: 1.1rem; background: none; border: 0; }
+.brain-card.leader {
+    border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-color));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 35%, transparent), 0 10px 30px -12px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+.brain-card.leader .jar { animation-duration: 3s; }
+
+.trophies { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.trophy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: var(--text-sm);
+    background: var(--bg-tertiary);
+}
+.trophy.locked { opacity: 0.4; filter: grayscale(1); }
+.trophy.earned { border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-color)); background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-card)); }
+.trophy-icon { font-size: 1rem; line-height: 1; }
+
+.quest-count { color: var(--accent-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.quest-bar { display: flex; gap: 0.4rem; margin: 0 0 var(--space-sm); }
+.quest-pip {
+    flex: 1;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    transition: background 0.3s ease;
+}
+.quest-pip.done { background: var(--accent-primary); border-color: var(--accent-primary); }
+
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 3000; overflow: hidden; }
+.confetti-bit {
+    position: absolute;
+    top: -1.5rem;
+    left: 50%;
+    width: 0.55rem;
+    height: 0.85rem;
+    border-radius: 1px;
+    opacity: 0.95;
+    animation: confetti-fall var(--d, 1200ms) ease-in var(--delay, 0ms) forwards;
+}
+@keyframes confetti-fall {
+    0% { transform: translate(-50%, -1.5rem) rotate(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--x, 0)), 102vh) rotate(var(--r, 360deg)); opacity: 0.9; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .brain-card.leader .jar { animation: none; }
+    .confetti { display: none; }
+}
+
 /* Learn tab: the lifecycle as numbered steps that tick themselves off from chain state */
 .learn-steps { display: grid; gap: var(--space-md); margin-top: var(--space-md); }
 .learn-step {

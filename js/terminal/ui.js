@@ -169,6 +169,24 @@ export function spinner(text = "Loading…") {
   return el("div", { class: "loading" }, el("span", { class: "spin" }), " ", text);
 }
 
+// ---- celebrate: a small confetti burst for a win (mint, deposit, bell, promote) ----
+export function celebrate(n = 16) {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const host = el("div", { class: "confetti", "aria-hidden": "true" });
+  const colors = ["#f06595", "#d6336c", "#ffd43b", "#74c0fc", "#63e6be", "#b197fc"];
+  for (let i = 0; i < n; i++) {
+    const piece = el("span", { class: "confetti-bit" });
+    piece.style.setProperty("--x", `${(Math.random() * 2 - 1) * 42}vw`);
+    piece.style.setProperty("--r", `${Math.random() * 720 - 360}deg`);
+    piece.style.setProperty("--d", `${900 + Math.random() * 700}ms`);
+    piece.style.setProperty("--delay", `${Math.random() * 120}ms`);
+    piece.style.background = colors[i % colors.length];
+    host.appendChild(piece);
+  }
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), 2000);
+}
+
 // ---- toasts ----
 let toastHost;
 export function toast(msg, kind = "info", ms = 4000) {

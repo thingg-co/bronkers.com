@@ -7,6 +7,7 @@ import { invalidate, loadBrain, loadSnapshot, ringable } from "../data.js";
 import { describe as describeVenueTrade, describeHolding } from "../venues.js";
 import { addrChip, amountField, append, badge, clear, el, emptyState, fmt, kv, modal, progress, sparkline, spinner, toast } from "../ui.js";
 import { custodyBadge, jar, statusBadge } from "./floor.js";
+import { achievements } from "../achievements.js";
 
 const WAD = 10n ** 18n;
 
@@ -207,6 +208,16 @@ function identity(brain) {
     ]));
 }
 
+function milestones(brain) {
+  const list = achievements(brain);
+  const got = list.filter((a) => a.earned).length;
+  return el("div", { class: "panel milestones" },
+    el("h4", {}, "Milestones ", el("span", { class: "muted" }, `${got}/${list.length}`)),
+    el("div", { class: "trophies" }, list.map((a) =>
+      el("span", { class: `trophy ${a.earned ? "earned" : "locked"}`, title: a.blurb },
+        el("span", { class: "trophy-icon" }, a.icon), el("span", { class: "trophy-label" }, a.label)))));
+}
+
 export async function render(root, { id }) {
   clear(root);
   root.append(el("p", {}, el("a", { href: "#/", class: "back" }, "← The Floor")), spinner("Reading the record…"));
@@ -247,6 +258,7 @@ export async function render(root, { id }) {
       stat("Trades", String(brain.tradeCount), ageTs ? `first ${fmt.when(ageTs)}` : "none yet"),
       stat("Max drawdown", brain.series.length > 1 ? fmt.pct(-brain.drawdown, 1) : "–", "share price, trade-to-trade")),
     chart(brain),
+    milestones(brain),
     internship(brain),
     camp(brain),
     reapPanel(brain, refresh),
