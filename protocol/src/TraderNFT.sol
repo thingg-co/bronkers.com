@@ -175,7 +175,10 @@ contract TraderNFT is ERC721, ITraderNFT {
         string memory svg = string.concat(
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">',
             '<rect width="64" height="64" fill="#fff0f6"/>',
-            '<rect x="15" y="3" width="34" height="10" rx="3" fill="#343a40"/>',
+            // sealed jars are corked; authored jars have a plain lid
+            g.custody == CUSTODY_AUTHORED
+                ? '<rect x="15" y="3" width="34" height="10" rx="3" fill="#343a40"/>'
+                : '<path d="M21 2h22l-2 12H23z" fill="#c0905e"/><path d="M26 4v8M31 4v8M36 4v8M40 4v8" stroke="#8b5a2b" stroke-width="1" opacity=".55"/>',
             '<rect x="11" y="12" width="42" height="49" rx="10" fill="#a5d8ff" fill-opacity=".38" stroke="#74c0fc" stroke-width="3"/>',
             '<ellipse cx="25.5" cy="38" rx="11" ry="13" fill="#f06595"/><ellipse cx="38.5" cy="38" rx="11" ry="13" fill="#f06595"/>',
             '<ellipse cx="32" cy="36" rx="9" ry="11" fill="#f06595"/><path d="M32 26V50" stroke="#c2255c" stroke-width="2.2" stroke-linecap="round"/>',

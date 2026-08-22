@@ -28,7 +28,8 @@ export function fluidTint(commitment) {
 
 export function jar(b) {
   const { h, s, l } = fluidTint(b && b.genome && b.genome.commitment);
-  return el("div", { class: "jar", "aria-hidden": "true", style: { "--fluid-h": String(h), "--fluid-s": `${s}%`, "--fluid-l": `${l}%` } },
+  const sealed = Boolean(b && b.genome && Number(b.genome.custody) > 0); // sealed jars are corked
+  return el("div", { class: sealed ? "jar sealed" : "jar", "aria-hidden": "true", style: { "--fluid-h": String(h), "--fluid-s": `${s}%`, "--fluid-l": `${l}%` } },
     el("span", { class: "jar-fluid" }),
     el("span", { class: "jar-wave w1" }), el("span", { class: "jar-wave w2" }),
     el("span", { class: "jar-lid" }), el("span", { class: "jar-brain" }, "🧠"),
