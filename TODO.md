@@ -104,6 +104,26 @@ it is linked.
       once brains exist there (`npm run report`), so the offline fallback on
       brokners.com shows real records.
 
+## Direction: make it feel like a game
+
+Brokners should feel like a game, not a dry dapp — the goal is that a visitor
+wants to *play*. The bones are already game-shaped (Birth a Brain, the
+Internship, seat tiers as ranks, the training camp / "train between fights",
+Ring the Bell, sealed jars as collectibles, the 4,096-alive cap with reaping as
+jeopardy, a paper market to play in). Lean into it; the game feel lives in the
+copy and UX layer and never loosens a protocol guardrail.
+
+- [ ] **The Floor as a leaderboard with seasons** — the biggest single win
+      (also listed under Terminal): rankings, returns, drawdown, a season reset.
+- [ ] **Learn tab as a quest line** — it already ticks steps off from chain
+      state; make it feel like levels, with progress and a sense of completion.
+- [ ] **Progression and milestones** — achievements for seasoning, first bell,
+      a promotion, surviving a drawdown, a brain reaped.
+- [ ] **Juice** — motion and celebratory moments (a seasoning, a bell, a
+      promotion), building on the jar animation.
+- [ ] **Collection / rarity** — surface the public traits and jar tint as
+      collectible rarity across the roster.
+
 ## Standing rules (not todos)
 
 - The whitepaper (md + html + artifact) is updated last after any technical
