@@ -1,14 +1,15 @@
 {
-  "generatedAtBlock": 46,
+  "generatedAtBlock": 50,
   "traders": [
     {
       "tokenId": 1,
       "name": "Umbra",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "account": "0xDeBC89087c0E4a0F1305038e0E58d2757C383775",
-      "vault": "0x1F708C24a0D3A740cD47cC0444E9480899f3dA7D",
-      "commitment": "0xf21ffb28fae00c2eb5f4835470cde6aeb18733797b56792f6cfa47d107ca86ef",
-      "birthBlock": 7,
+      "account": "0x11490043868B9eBef97D103CC7e73f322760E4EC",
+      "vault": "0x32467b43BFa67273FC7dDda0999Ee9A12F2AaA08",
+      "commitment": "0x180433cfacd0ed703ab84c73d967b5b46bc48ab1035e11d0fc9da9a014f2e9da",
+      "generation": 0,
+      "birthBlock": 8,
       "model": "claude-sonnet-5",
       "riskProfile": 1,
       "cadence": 24,
@@ -23,8 +24,8 @@
       "runtimeFeePayments": 6,
       "trades": [
         {
-          "block": 14,
-          "ts": 1787421635,
+          "block": 15,
+          "ts": 1787422950,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -34,8 +35,8 @@
           "fromVault": false
         },
         {
-          "block": 21,
-          "ts": 1787425236,
+          "block": 22,
+          "ts": 1787426551,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -45,8 +46,8 @@
           "fromVault": true
         },
         {
-          "block": 24,
-          "ts": 1787428836,
+          "block": 25,
+          "ts": 1787430151,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -56,8 +57,8 @@
           "fromVault": true
         },
         {
-          "block": 27,
-          "ts": 1787432437,
+          "block": 28,
+          "ts": 1787433752,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -67,8 +68,8 @@
           "fromVault": true
         },
         {
-          "block": 30,
-          "ts": 1787436037,
+          "block": 31,
+          "ts": 1787437352,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -78,8 +79,8 @@
           "fromVault": true
         },
         {
-          "block": 46,
-          "ts": 1787439713,
+          "block": 49,
+          "ts": 1787459031,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
@@ -94,10 +95,11 @@
       "tokenId": 2,
       "name": "Nocturne",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "account": "0xEB929fc272047cD2e90e12D9460eE4b3344afcb0",
-      "vault": "0xf41B47c54dEFF12f8fE830A411a09D865eBb120E",
-      "commitment": "0x05a3ff90d95290fe2f8b7da4955172d104c346fd730051c58fba0b5838b6f9ce",
-      "birthBlock": 31,
+      "account": "0x66320F0bb426F9D83Ff0E4476b50B71232d5864e",
+      "vault": "0x4ABEaCA4b05d8fA4CED09D26aD28Ea298E8afaC8",
+      "commitment": "0x380945c9a6596c35e3803c64977dad1d840a1114f98306bbcc1016f90e998017",
+      "generation": 1,
+      "birthBlock": 32,
       "model": "claude-sonnet-5",
       "riskProfile": 0,
       "cadence": 4,
@@ -106,20 +108,31 @@
       "seasoned": true,
       "nav": "0",
       "pps": "1",
-      "tradeCount": 1,
+      "tradeCount": 2,
       "runtimeFee": "0",
       "runtimeFeesPaid": "0",
       "runtimeFeePayments": 0,
       "trades": [
         {
-          "block": 37,
-          "ts": 1787436038,
+          "block": 38,
+          "ts": 1787437353,
           "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
           "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
           "inSym": "mUSDC",
           "outSym": "mWETH",
           "amountIn": "25",
           "amountOut": "0.0125",
+          "fromVault": false
+        },
+        {
+          "block": 50,
+          "ts": 1787459031,
+          "tokenIn": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "tokenOut": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          "inSym": "mUSDC",
+          "outSym": "mWETH",
+          "amountIn": "25.3125",
+          "amountOut": "0.01265625",
           "fromVault": false
         }
       ]
@@ -128,10 +141,11 @@
       "tokenId": 3,
       "name": "",
       "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "account": "0xe5eE9014B5DE50883e8789c6F7219764410DFa14",
-      "vault": "0x05242D4AC717Cdf38C36AF290F2b0DA99AA82c67",
+      "account": "0x1feEb2674d902d7160cd54bb722Ea8596Ba9ba8A",
+      "vault": "0x4AE5AF759E17599107c1C688bfaCF6131C376D51",
       "commitment": "0x6822f9046f1ab2c62c40a0bf10f207b54c7f321d4689abb225cd70f95fb41b16",
-      "birthBlock": 39,
+      "generation": 0,
+      "birthBlock": 42,
       "model": "claude-sonnet-5",
       "riskProfile": 2,
       "cadence": 24,
