@@ -15,6 +15,7 @@ const extraNftAbi = parseAbi([
   "function nextId() view returns (uint256)",
   "function nameOf(uint256) view returns (string)",
   "function generationOf(uint256) view returns (uint32)",
+  "function exists(uint256) view returns (bool)",
 ]);
 const extraGuardAbi = parseAbi([
   "function tierOf(uint256) view returns (uint8)",
@@ -46,6 +47,9 @@ async function tsOf(block: bigint): Promise<number> {
 const nextId = await publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "nextId" });
 const traders = [];
 for (let tokenId = 1n; tokenId <= nextId; tokenId++) {
+  // reaped brains are burned: skip them (their record still lives in the logs)
+  const alive = await publicClient.readContract({ address: nft, abi: extraNftAbi, functionName: "exists", args: [tokenId] }).catch(() => true);
+  if (!alive) continue;
   const [genome, owner, vault, account, name, tier, generation] = await Promise.all([
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "genomeOf", args: [tokenId] }),
     publicClient.readContract({ address: nft, abi: traderNftAbi, functionName: "ownerOf", args: [tokenId] }),
