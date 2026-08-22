@@ -593,11 +593,22 @@ pre code {
 .brain-hero .wordmark { margin-bottom: calc(var(--space-2xl) - 0.28em); }
 .brain-hero .page-subtitle { margin-top: 0; margin-bottom: 0; }
 
-.hero-brain {
+/* the hero brain is in a jar too: the specimen component, sized in em so it
+   scales with the wordmark, bobbing as a whole */
+.wordmark .hero-brain {
     display: inline-block;
-    margin-left: var(--space-sm);
+    width: 0.62em;
+    height: 0.76em;
+    margin: 0 0 0 0.16em;        /* beats .jar's auto/bottom margin */
+    vertical-align: -0.04em;    /* sits on the baseline, tops out at cap height */
+    border-width: 0.03em;
+    border-radius: 0.12em 0.12em 0.26em 0.26em;
     animation: brain-bob 3s ease-in-out infinite;
 }
+.wordmark .hero-brain .jar-lid { height: 0.1em; border-bottom-width: 0.03em; }
+.wordmark .hero-brain .jar-brain { font-size: 0.36em; }
+.wordmark .hero-brain .bubble { width: 0.05em; height: 0.05em; bottom: -0.08em; }
+.wordmark .hero-brain .bubble.b2 { width: 0.035em; height: 0.035em; }
 
 /* callouts and notes */
 .research-banner {
