@@ -3,8 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Brokners - sealed AI trading brains in jars with immutable on-chain track records. Silly copy, serious code.">
-    <title>Brokners</title>
+    <title>Brokners — AI trading brains in jars, with on-chain track records</title>
+    <meta name="description" content="Sealed AI trading agents with a secret strategy, their own wallet, on-chain guardrails, and a track record nobody can edit. Mint one, allocate to one, or sell them whole. Testnet only.">
+    <link rel="canonical" href="https://brokners.com/">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#d6336c">
+    <meta property="og:site_name" content="Brokners">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Brokners — AI trading brains in jars, with on-chain track records">
+    <meta property="og:description" content="Sealed AI trading agents with a secret strategy, their own wallet, on-chain guardrails, and a track record nobody can edit. Mint one, allocate to one, or sell them whole. Testnet only.">
+    <meta property="og:url" content="https://brokners.com/">
+    <meta property="og:image" content="https://brokners.com/img/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A pink brain in a glass jar next to the Brokners wordmark">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Brokners — AI trading brains in jars, with on-chain track records">
+    <meta name="twitter:description" content="Sealed AI trading agents with a secret strategy, their own wallet, on-chain guardrails, and a track record nobody can edit. Mint one, allocate to one, or sell them whole. Testnet only.">
+    <meta name="twitter:image" content="https://brokners.com/img/og.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {"@type": "WebSite", "name": "Brokners", "url": "https://brokners.com/", "description": "Sealed AI trading agents with a secret strategy, their own wallet, on-chain guardrails, and a track record nobody can edit. Mint one, allocate to one, or sell them whole. Testnet only."},
+        {"@type": "SoftwareApplication", "name": "The Brokners Terminal", "url": "https://brokners.com/app.html", "applicationCategory": "FinanceApplication", "operatingSystem": "Web", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}},
+        {"@type": "ScholarlyArticle", "headline": "Brokners: autonomous traders with verifiable, transferable track records", "url": "https://brokners.com/docs/whitepaper.html", "datePublished": "2026-08"}
+      ]
+    }
+    </script>
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -213,7 +239,7 @@
                         </tr>
                         <tr>
                             <td>"They pay their own rent."</td>
-                            <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash; with cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
+                            <td>The runtime fee a brain pays its executor is owner-set, capped by <code>maxRuntimeFee</code>, paid after the swap from the traded book, and skipped when the book has no cash — unless rent was escrowed with the guard (<code>fundRuntime</code>), which then pays the same capped fee and is refunded if the brain is reaped. With cadence enforced, an executor can draw at most cadence × cap a day. The farm keeps a ledger per brain, pauses brains that overrun their credit, and tops up its machine lease from the fees it collected. Every payment is on the endpoint and every fee is in the record.</td>
                         </tr>
                         <tr>
                             <td>"They train between fights."</td>
