@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Brokners: one brain, one jar. -->
+  <!-- lid -->
+  <rect x="15" y="3" width="34" height="10" rx="3" fill="#343a40"/>
+  <rect x="19" y="5" width="26" height="2" rx="1" fill="#868e96"/>
+  <!-- jar glass -->
+  <rect x="11" y="12" width="42" height="49" rx="10" fill="#a5d8ff" fill-opacity=".38" stroke="#74c0fc" stroke-width="3"/>
+  <!-- brine line -->
+  <path d="M14 20 Q32 24 50 20" fill="none" stroke="#74c0fc" stroke-width="2" stroke-opacity=".7"/>
+  <!-- brain: two lobes -->
+  <ellipse cx="25.5" cy="38" rx="11" ry="13" fill="#f06595"/>
+  <ellipse cx="38.5" cy="38" rx="11" ry="13" fill="#f06595"/>
+  <ellipse cx="32" cy="36" rx="9" ry="11" fill="#f06595"/>
+  <!-- fissure -->
+  <path d="M32 26 V50" fill="none" stroke="#c2255c" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- folds -->
+  <path d="M18 34 q4 -4 8 0 q3 3 6 0" fill="none" stroke="#c2255c" stroke-width="2" stroke-linecap="round"/>
+  <path d="M19 43 q4 -4 8 0 q3 3 5 0" fill="none" stroke="#c2255c" stroke-width="2" stroke-linecap="round"/>
+  <path d="M34 33 q4 -4 8 0 q3 3 5 0" fill="none" stroke="#c2255c" stroke-width="2" stroke-linecap="round"/>
+  <path d="M35 42 q4 -4 8 0 q2 2 3 0" fill="none" stroke="#c2255c" stroke-width="2" stroke-linecap="round"/>
+  <!-- highlight -->
+  <path d="M22 30 q3 -4 7 -3" fill="none" stroke="#ffdeeb" stroke-width="2" stroke-linecap="round" stroke-opacity=".8"/>
+  <!-- bubbles -->
+  <circle cx="46" cy="22" r="1.6" fill="#e7f5ff"/>
+  <circle cx="43" cy="17" r="1.1" fill="#e7f5ff"/>
+  <circle cx="18" cy="55" r="1.4" fill="#e7f5ff" fill-opacity=".8"/>
+</svg>

@@ -25,11 +25,17 @@ session needs to know that the code doesn't say.
    runtime (the "enclave") and the optional static data/traders.json from
    agent report.ts. Keep it that way.
 4. **Zero build tooling for the site.** Plain HTML/CSS/JS, GitHub Pages from
-   repo root (CNAME → brokners.com, .nojekyll). Design system: darkly.fund
-   tokens (css/base.css golden-ratio scale, css/themes.css light/dark) with
-   the Brokners identity layered in css/main.css — "typo pink" accent
-   (#d6336c light / #f06595 dark) overriding the fund blue on body tokens,
-   Bricolage Grotesque display headings, the tilted pink N in the wordmark.
+   repo root (CNAME → brokners.com, .nojekyll). **One stylesheet:
+   css/brokners.css**, loaded by every page; no inline `<style>` blocks
+   anywhere (consolidated Aug 2026 from base/themes/components/main + three
+   per-page inline blocks). Tokens descend from darkly.fund (golden-ratio
+   spacing/type scale) with the Brokners identity baked in: "typo pink"
+   accent (#d6336c light / #f06595 dark), Bricolage Grotesque h1–h3, the
+   tilted pink N (.typo-n). Horizontal page padding is defined once, on
+   `.container`; documents are `<main><div class="container"><article
+   class="doc">` and `.doc` only sets reading measure and vertical rhythm.
+   New page-specific styles go in the relevant section of brokners.css,
+   never inline.
 5. **Genome canonicalization is frozen** (sorted keys, no whitespace —
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
@@ -76,6 +82,16 @@ session needs to know that the code doesn't say.
 - Proof of Brain: attestation registry binding executor keys to reproducible
   runtime measurements, so "AI-traded" is verifiable, not claimed.
 - Realized-only performance fees.
-- Base Sepolia deployment (canonical 6551 registry
-  0x000000006551c19487814612e58FE06813775758; Uniswap v3 via a thin IVenue
-  adapter).
+- First live venue is **Polymarket** (Polygon; CTF Exchange, USDC collateral,
+  binary outcome tokens) via a thin IVenue adapter — decided Aug 2026, replaces
+  the earlier Uniswap-on-Base-Sepolia plan. Testnet pilot on Polygon Amoy
+  against a mock conditional-token exchange; canonical 6551 registry
+  0x000000006551c19487814612e58FE06813775758. Open integration question: the
+  TBA must be the off-chain order signer and must refuse anything the guard
+  would reject (signing policy in the enclave + approvals to the exchange only).
+  The protocol tests still use the two mock spot markets; that is fine for the
+  invariants but the paper now describes Polymarket as the target.
+- The whitepaper (docs/whitepaper.*) is design/theory only — legal and
+  regulatory discussion was removed at the owner's request (Aug 2026). The
+  testnet-only gate above is still an operating rule; it just isn't argued in
+  the paper.

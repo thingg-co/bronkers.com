@@ -153,9 +153,12 @@ so administrative control follows the token automatically on transfer.
 
 `MockERC20` (open mint), `MockSwapRouter` (settable price, exact-in `swap()`,
 `quote()` view, adjustable execution-vs-quote skew for negative slippage tests).
-The guard is venue-agnostic; on Base Sepolia the same path can point at Uniswap v3
-`SwapRouter02` with the canonical 6551 registry
-`0x000000006551c19487814612e58FE06813775758`.
+The guard is venue-agnostic. The first live target is Polymarket's conditional-token
+exchange on Polygon (USDC collateral, binary outcome tokens as `tokenIn`/`tokenOut`),
+reached through the same `IVenue` path, with the canonical 6551 registry
+`0x000000006551c19487814612e58FE06813775758`. The open integration item is order
+signing: Polymarket matches off-chain and settles on-chain, so the TBA has to sign
+orders and the enclave has to apply the guard's policy to what it will sign.
 
 ## 3. Genome lifecycle
 
@@ -224,11 +227,11 @@ load config → SecretStore.decrypt(genome) → verify hash vs on-chain commitme
 
 ## 6. Deployment topology
 
-| Environment | Registry | DEX | Purpose |
+| Environment | Registry | Venue | Purpose |
 |---|---|---|---|
 | anvil (local) | deployed by `Deploy.s.sol` | `MockSwapRouter` | tests + demo (primary target) |
-| Base Sepolia | canonical `0x…5758` | Uniswap v3 (stretch) | public testnet pilot |
-| Base mainnet | — | — | **out of scope**; gated on audit + counsel |
+| Polygon Amoy | canonical `0x…5758` | Polymarket adapter vs. mock CTF exchange | public testnet pilot |
+| Polygon mainnet | canonical `0x…5758` | Polymarket CTF Exchange | limited run, agent-owned capital only; gated on audit |
 
 ## 7. Threat model
 

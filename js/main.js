@@ -1,59 +1,27 @@
-// Main JavaScript - Form Handling and Utilities
+// Site-wide behaviour: active nav link, mobile nav panel.
 
 (function() {
     'use strict';
 
-    // Handle contact form submission
-    const initContactForm = () => {
-        const contactForm = document.getElementById('contactForm');
-        const formSuccess = document.getElementById('formSuccess');
-
-        if (!contactForm) return;
-
-        // Check if we were redirected back after successful submission
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('success') === 'true') {
-            contactForm.style.display = 'none';
-            formSuccess.style.display = 'block';
-
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
+    // Mark the nav link for the current section. Links are root-relative
+    // clean URLs ("/", "/app", "/docs/whitepaper"); pages may be served with
+    // or without ".html". Matching is by first path segment, so every page
+    // under /docs lights up "The Paper".
+    const section = (path) => {
+        const clean = path.replace(/\.html$/, '').replace(/\/index$/, '/');
+        return clean.split('/')[1] || '';
     };
-
-    // Mobile menu toggle (if needed in the future)
-    const initMobileMenu = () => {
-        // Placeholder for mobile menu functionality
-        // Can be expanded when mobile hamburger menu is added
-    };
-
-    // Add active state to current page in navigation
     const updateActiveNav = () => {
-        const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-        const navLinks = document.querySelectorAll('.nav-links a');
-
-        navLinks.forEach(link => {
-            const href = link.getAttribute('href');
-            if (href === currentPage) {
-                link.classList.add('active');
-            } else {
-                link.classList.remove('active');
-            }
+        const here = section(window.location.pathname);
+        document.querySelectorAll('.nav-links a').forEach((link) => {
+            link.classList.toggle('active', section(link.getAttribute('href') || '') === here);
         });
     };
 
-    // Initialize all main functionality
-    const init = () => {
-        initContactForm();
-        initMobileMenu();
-        updateActiveNav();
-    };
-
-    // Run initialization when DOM is ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', updateActiveNav);
     } else {
-        init();
+        updateActiveNav();
     }
 })();
 

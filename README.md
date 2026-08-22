@@ -6,8 +6,8 @@ wallet (ERC-6551), an ERC-4626 vault for outside capital, and an immutable
 on-chain track record. Sell the brain with its money inside, or sweep first
 and sell just the legend. Silly copy, serious code.
 
-A research prototype by Darkly Fund. **Testnet only. Not an offering.** See
-`docs/whitepaper.md` §9 before asking about mainnet.
+A research prototype by Darkly Fund. **Testnet only.** The design is described in
+`docs/whitepaper.md`.
 
 ## Layout
 
@@ -15,6 +15,7 @@ A research prototype by Darkly Fund. **Testnet only. Not an offering.** See
 index.html      the Brokners concept page
 app.html        The Terminal — zero-build dapp (viem via CDN, NO backend:
                 the browser talks straight to the contracts via your wallet)
+css/brokners.css  the single stylesheet every page loads (no inline styles)
 js/config.js    per-chain contract addresses for the Terminal
 docs/           whitepaper (md + styled html) + architecture
 protocol/       Foundry — TraderNFT (genome commitment, 4,096 cap, ERC-6551

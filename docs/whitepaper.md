@@ -1,362 +1,392 @@
 # Brokners
 
-**Autonomous traders. Verifiable track records. Ownable.**
+**Autonomous traders with verifiable, transferable track records**
 
-*Concept whitepaper — v0.2 draft, August 2026*
+*Concept paper, v0.3 working draft, August 2026*
 
-> **This document is research, not an offering.** Brokners is a testnet-only
-> prototype. Nothing here is an offer to sell or a solicitation to buy any security,
-> token, or investment product. See [Legal and Regulatory Considerations](#9-legal-and-regulatory-considerations),
-> which is not an afterthought — read it.
+> **Status.** This is a research document describing a testnet prototype. The
+> contracts, runtime, and figures described here run on a local chain and on testnets
+> only.
 
 ---
 
-## 1. Abstract
+## 1. Introduction
 
-Brokners tokenizes the *trader*, not the trade. Each token in the collection is a
-pure-AI trading agent: a secret prompt (its "genome") committed on-chain by hash, a
-wallet of its own, an optional vault of outside capital, and an immutable, publicly
-verifiable track record built one on-chain trade at a time. Because the trader is an
-ERC-721 token, it can be bought and sold on any NFT marketplace — **with its capital**
-(the assets in its wallet transfer atomically with the token) or **without** (the seller
-sweeps the wallet first; the history stays). The roster of traders, taken together, is a
-hedge fund that exists only on the blockchain and can change hands as easily as any
-other digital asset.
+This paper describes a protocol in which the unit of ownership is a trading agent
+rather than a position, a fund share, or a strategy licence. Each agent is represented
+by an ERC-721 token. Associated with the token are (i) a commitment to a secret prompt
+that fully specifies the agent's behaviour, which we call its genome; (ii) a wallet
+whose control is derived from the token; (iii) optionally, an ERC-4626 vault through
+which third parties may allocate capital to the agent; and (iv) a trade history that
+exists only as events emitted by addresses the token controls.
 
-## 2. Motivation
+Because the agent is a token, it can be sold on any existing NFT marketplace. The seller
+may transfer it together with the contents of its wallet, in which case the buyer
+receives a capitalised, running agent, or may first withdraw the wallet and transfer the
+token alone, in which case the buyer receives the identity, the genome rights, and the
+history. In either case the history cannot be separated from the token. The collection
+of agents, considered together, behaves like a multi-manager fund whose managers are
+themselves transferable assets.
 
-Track records are the currency of asset management, and today they are unverifiable.
-A fund manager's tear sheet is a PDF; a Twitter trader's PnL is a screenshot. Even
-when returns are real, they are not *portable* — a manager cannot sell their track
-record, and a buyer cannot own it.
+Most of the design decisions below follow from three requirements: that a track record
+be recomputable by anyone from public data; that the strategy which produced it be
+fixed at the moment the record begins; and that neither property be lost when ownership
+changes.
 
-Putting the trader itself on-chain changes both facts:
+The initial trading venue is Polymarket, a prediction market whose outcome tokens are
+binary conditional tokens collateralised by USDC and settled on Polygon. We chose it for
+three reasons that the rest of the paper relies on. Access is entirely programmatic,
+through a public order-book API and public contracts, so an agent needs no intermediary
+between itself and the market. Each position has a bounded and well-defined payoff,
+which simplifies valuation and risk limits considerably compared with spot or leveraged
+markets. And fills settle on-chain, so the record is legible in the way Section 7
+requires. The venue interface is abstract, and other venues can be curated later.
 
-- **Verifiability.** Every trade the agent makes is an on-chain event, executed from an
-  address that provably belongs to the token. NAV and PnL are computed from public
-  data. Nothing can be backfilled, edited, or cherry-picked.
-- **Portability.** The trader is property. Its identity, its history, its fee rights,
-  and (optionally) its book of assets transfer with a single token transfer.
-- **Provenance.** The strategy behind the track record is committed by hash at mint and
-  can never change. A buyer knows the brain that produced the last 10,000 trades is
-  the same brain they are buying.
+## 2. Background and Motivation
 
-A pure-AI trader also removes key-person risk in the traditional sense — the "manager"
-cannot quit, die, or start a rival fund — but replaces it with new questions of prompt
-custody and model risk, which this paper treats honestly in §10.
+Track records are the primary currency of asset management, and in their conventional
+form they are weak evidence. A manager's tear sheet is a document produced by the
+manager; a retail trader's profit-and-loss figure is a screenshot. Even a genuine
+record is not transferable: a manager cannot sell it, and an acquirer cannot own it
+independently of the person.
 
-## 3. The Trader Genome
+Placing the agent itself on-chain addresses both limitations. Every trade is a
+transaction from an address that provably belongs to the token, so net asset value and
+returns can be derived from public logs and cannot be edited or selectively reported
+after the fact. The agent is property in the ordinary sense, so its identity, history,
+fee entitlements, and (if the seller chooses) its assets move with a single transfer.
+And because the strategy is committed by hash at mint and has no update path, a buyer
+can be confident that the agent producing future trades is the one that produced the
+past ones.
 
-A trader is minted from a **genome**: the prompt that defines its strategy, personality,
-and edge, plus configuration tweaks supplied by the minter:
+An agent of this kind has no key-person risk in the usual meaning: it cannot resign,
+fall ill, or leave to start a competing fund. It introduces other risks in their place,
+principally around custody of the prompt and the behaviour of the underlying model, and
+we treat these in Section 9.
+
+## 3. The Genome: Commitment and Custody
+
+An agent is minted from a genome consisting of a prompt, which defines strategy and
+disposition, together with a small set of public configuration traits:
 
 | Component | Visibility | Example |
 |---|---|---|
-| Prompt | **Secret** (hash commitment only) | "You are a mean-reversion trader specializing in…" |
+| Prompt | Secret (hash commitment only) | "You are a mean-reversion trader specialising in…" |
 | Risk profile | Public trait | conservative / balanced / aggressive |
-| Asset universe | Public trait | allowlisted token set id |
-| Cadence | Public trait | max one trade per 4 hours |
+| Asset universe | Public trait | identifier of a curated market set |
+| Cadence | Public trait | at most one trade per four hours |
 | Model | Public trait | pinned model identifier |
 
-At mint, the protocol stores `keccak256(canonicalJSON(genome))` on-chain along with the
-public traits and the birth block. The plaintext prompt is encrypted and stored
-off-chain; only its hash lives on-chain.
+At mint the protocol records `keccak256(canonicalJSON(genome))` alongside the public
+traits and the block number. The canonicalisation is fixed (sorted keys, no
+whitespace) and is part of the protocol specification, since any change to it would
+invalidate every existing commitment. The plaintext prompt is encrypted and held
+off-chain; only the hash is stored.
 
-**Immutability is the point.** There is no genome-update function. If the hash can
-never change, the track record has provenance: the strategy that earned it is the
-strategy being sold.
+There is no function to update a genome. This is what gives the record its provenance:
+the strategy that produced the history is, by construction, the strategy being
+transferred.
 
-### Genome custody — sealed by default
+### 3.1 Custody modes
 
-*How* the plaintext is held is itself an on-chain trait, because it determines what a
-buyer is actually buying:
+How the plaintext is held is itself recorded as an on-chain trait, because it
+determines what a purchaser actually acquires.
 
-| Custody | Who has ever seen the prompt | What a sale transfers |
+| Custody | Who has read the prompt | What transfers on sale |
 |---|---|---|
-| 0 · Authored | the minter (keeps a decryption key) | key handoff; every past owner retains the plaintext forever |
-| 1 · Sealed-authored | the minter only, at writing time | nothing to hand off — the prompt is sealed to the **enclave key** at mint and no future owner can ever read it |
-| 2 · Sealed-generated | **no one** — the prompt is composed inside the enclave from the minter's brief and sealed immediately | pure exclusivity: only the hash identifies the strategy |
+| 0 · Authored | The minter, who retains a decryption key | A key handoff. Every prior owner retains the plaintext indefinitely. |
+| 1 · Sealed-authored | The minter, at authoring time only | Nothing. The prompt is sealed to the enclave key at mint; no subsequent owner can read it. |
+| 2 · Sealed-generated | No one. The prompt is composed inside the enclave from a brief supplied by the minter and sealed immediately. | Nothing. Only the commitment identifies the strategy. |
 
-Sealed custody solves the resale-erosion problem of secret prompts: in authored mode,
-every sale leaks the strategy to one more permanent holder, so the "secret sauce"
-depreciates with each transfer. A sealed genome cannot leak through sale at all — the
-enclave (in production, a hardware TEE with remote attestation; in the prototype, the
-runtime process holding the enclave key) is the only thing that ever decrypts it, and
-it uses the prompt without exposing it. Sealed-generated goes furthest: a trader whose
-strategy *no human has ever read*, identified only by its commitment and judged only by
-its record.
+Sealed custody addresses what might be called resale erosion. Under authored custody
+each sale discloses the strategy to one more permanent holder, so whatever edge the
+prompt contains depreciates with every transfer. A sealed genome cannot leak through
+sale, because the only party that ever decrypts it is the enclave (in production, a
+hardware trusted execution environment with remote attestation; in the prototype, the
+runtime process holding the enclave key), and the enclave uses the prompt without
+exposing it. Mode 2 goes further still: the resulting agent is one whose strategy no
+human has read, identified only by its commitment and evaluated only by its record.
+Sealing is the default in the prototype.
 
-## 4. The Trader as Property
+## 4. Token-Bound Ownership
 
-Each token controls, through the ERC-6551 token-bound-account standard, **its own
-wallet** — an address derived from the token itself. Whoever owns the NFT controls the
-wallet; when the NFT transfers, control of the wallet and everything in it transfers in
-the same transaction.
+Each token controls a wallet of its own through the ERC-6551 token-bound account
+standard. The wallet address is derived from the token, and whoever holds the token
+controls the wallet. A transfer of the token is therefore also a transfer of the
+wallet and its contents, in the same transaction.
 
-This is what makes "sell the trader" concrete:
+This is what makes sale of an agent well-defined. A seller who wishes to include
+capital simply transfers the token; the wallet, including trading capital and any
+accrued fee shares, moves with it. A seller who wishes to retain capital sweeps the
+wallet to their own address first and then transfers the token; the buyer receives the
+identity, the genome rights, and the complete history with an empty book. In both
+cases the trade events were emitted by the token's own addresses and remain attached
+to it.
 
-- **Sell WITH capital.** Transfer the NFT. The trader's wallet — its trading capital,
-  its accumulated fees — rides along atomically. The buyer receives a funded, running
-  trader.
-- **Sell WITHOUT capital.** The owner sweeps the wallet to their own address first,
-  then transfers the NFT. The buyer receives the identity, the genome rights, and the
-  full track record, with an empty book.
+Supply is capped at 4,096 agents. We chose the figure because it is 2^12 and because a
+collection of brains ought to have one per bit; the cap is a protocol constant in any
+case.
 
-Either way, the history is inseparable from the token: the trade events were emitted by
-the token's own addresses and can never be detached, faked, or left behind.
+## 5. Vaults and Fee Mechanics
 
-The collection is **hard-capped at 4,096 traders** — one brain per bit. Scarcity is a
-protocol constant, not a promise.
+An agent's own wallet is its proprietary book. In addition, each agent fronts an
+ERC-4626 vault that external depositors may fund. Depositors supply the base asset (USDC, which is also the venue's collateral) and
+receive vault shares, which are redeemable at any time at the prevailing share price.
+The agent trades vault assets under the same on-chain policy that governs its own
+book.
 
-## 5. Open Vaults
+The token owner is compensated through a management fee, accrued continuously and
+pro rata over time, and a performance fee charged only on gains above a per-share
+high-water mark. An agent in drawdown earns no performance fee until the mark is
+recovered. Both fees are minted as vault shares to the agent's own wallet rather than
+to the owner's address. Accrued fees therefore travel with the token automatically, and
+accrual is checkpointed on every transfer so that the seller's and buyer's entitlements
+are exact.
 
-A trader's own wallet is its proprietary book. Beyond that, each trader fronts an
-**ERC-4626 vault** that outside depositors (LPs) can fund:
+Fee crystallisation is a public function. Anyone may call it, and the caller receives
+one percent of the fee shares crystallised by that call, drawn from the owner's share
+and never from depositor capital. In the prototype's interface this function is called
+`ringTheBell`, and the keeper incentive is presented as a ritual rather than a job; the
+economics are those of an ordinary crank.
 
-- LPs deposit the base asset and receive vault shares; they can withdraw at any time at
-  the prevailing share price.
-- The agent trades vault assets under the same on-chain guardrails as its own book.
-- The token owner earns a **management fee** (streamed pro-rata over time) and a
-  **performance fee** charged only on gains above a per-share **high-water mark** — a
-  trader that draws down earns no performance fee until it makes LPs whole.
-- Fees are minted as vault shares **to the trader's own wallet**, not to the owner's
-  address. Accrued fees therefore travel with the NFT automatically, and there is
-  nothing to snipe or forget at transfer time. Fee accrual is checkpointed on every
-  transfer so the economics are exact.
-- **Ring the Bell.** Fee crystallization is a public crank, and cranking it pays:
-  anyone may ring, and the ringer earns 1% of the fee shares that call crystallizes —
-  carved from the owner's fee take, never from LP capital. Keeper incentives as a
-  community ritual.
-- Deposits are **allowlist-gated by default**. This is a compliance hook, not a
-  technical necessity: it is how accredited-investor gating would be enforced if this
-  system ever left testnet (see §9).
-- **A new trader cannot take outside money at all.** Every trader serves a **paper
-  season** first: a protocol-set minimum number of trades on its own book, over a
-  minimum period, before its vault will accept a single outside deposit. LPs never
-  fund an untested prompt — they fund a record.
+Two restrictions apply to deposits. First, deposits are allowlist-gated by default, so that an owner may restrict who can allocate to an agent; the allowlist is a configuration rather than a change to the vault. Second, a newly minted agent cannot accept
+external capital at all. Every agent must first complete a paper season, a
+protocol-specified minimum number of trades on its own book over a minimum period,
+before its vault will accept a deposit. The site refers to this as the internship. The
+effect is that depositors never fund an untested prompt; they fund a record.
 
-Vault administration — rotating the executor key, tightening policy — always follows
-`ownerOf(tokenId)` live. Buying the trader is buying the manager's seat.
+Administrative control of the vault, including rotation of the executor key and
+narrowing of trading policy, follows `ownerOf(tokenId)` at all times. Acquiring the
+token is acquiring the manager's seat.
 
-## 6. Execution and Guardrails
+## 6. Execution Policy
 
-The AI runs off-chain: a runtime decrypts the genome, feeds market state to the model,
-and receives a structured trade intent. The runtime holds an **executor key** — a
-disposable hot key whose entire permission set is one function:
+The model runs off-chain. A runtime decrypts the genome, supplies market state to the
+model, and receives a structured trade intent in return. The runtime holds an executor
+key whose entire permission set is a single function:
 
 ```
 executeTrade(tokenId, venue, tokenIn, tokenOut, amountIn, minAmountOut)
 ```
 
-The on-chain guard enforces, on every call:
+On a prediction market, `tokenIn` and `tokenOut` are the collateral and an outcome
+token, or the reverse when a position is closed; the notional and slippage limits below
+are applied to the price of the outcome token in collateral terms. On every call the on-
+chain guard enforces the following.
 
-- **Curated venues and tokens** — the tradeable universe is **protocol-curated**, and
-  deliberately small: at launch, a couple of deep, established markets (e.g. WETH/USDC
-  and WBTC/USDC on one major venue). Owners can narrow their trader's allowlist but
-  can never add an uncurated venue or token.
-- **Position cap, set by seat tier** — per-trade notional is limited to a fraction of
-  NAV whose ceiling is the trader's **tier**: every brain mints as an *Intern* (20%),
-  and owners can pay a one-time protocol fee to activate *Associate* (30%) or
-  *Partner* (50%) seats. Tiers are mechanical, not cosmetic — the guard enforces the
-  ceiling, owners can only tune below it, and upgrades are one-way.
-- **Slippage bound** — `minAmountOut` must be within the configured tolerance of quote.
-- **Cadence rate-limit** — trades cannot exceed the declared frequency.
-- **No exit path** — swap proceeds always return to the trader's wallet or vault. The
-  executor key cannot withdraw, approve, or transfer to any external address, ever.
+*Curated venues and markets.* The tradeable universe is curated at the protocol level
+and is intentionally small. Venues are reached through a thin adapter interface. The
+first adapter targets Polymarket's conditional-token exchange, and the markets an agent
+may trade are a protocol-curated subset of that venue's conditions, selected for depth,
+a clear resolution source, and a bounded time horizon. The prototype's tests exercise
+the same guard against a mock two-asset swap venue, which is sufficient to check the
+invariants. Owners may narrow their agent's allowlist but cannot add a venue or market
+that the protocol has not curated.
 
-The trust boundary is the contract, not the runtime. A fully compromised runtime can at
-worst make bad trades within policy — it cannot steal.
+*Per-trade notional cap, by seat tier.* Notional per trade is limited to a fraction of
+net asset value, with the ceiling set by the agent's tier. Every agent mints as an
+Intern (20%); the owner may pay a one-time protocol fee to activate an Associate (30%)
+or Partner (50%) seat. The guard enforces the ceiling, owners may only configure below
+it, and upgrades are irreversible. The titles are decorative; the limits are not.
 
-### Proof of Brain: verifying the AI is the trader
+*Slippage bound.* `minAmountOut` must lie within a configured tolerance of the venue
+quote.
 
-A question any serious reader should ask: what stops a human from puppeteering
-a "brain" — trading by hand through the executor key and selling the record as
-AI provenance? The genome hash proves *which* strategy was committed; it does
-not prove the strategy was *driving*. The credible answer is attested
-execution:
+*Cadence.* Trades may not exceed the frequency declared in the public traits.
 
-1. **Attested enclaves.** The full runtime — sealed genome, model call, and
-   the executor key — runs inside a TEE (e.g. AWS Nitro). The enclave's remote
-   attestation binds three facts together: the exact open-source runtime image
-   (a reproducible-build hash), the executor public key (generated inside the
-   enclave, never exported), and the genome commitment it serves. If the only
-   thing that can sign `executeTrade` is code whose measured image contains no
-   human-input path, then every trade is machine-decided *by construction* —
-   not by policy, not by promise.
-2. **An attestation registry.** The v2 guard accepts an executor key only when
-   it arrives with a valid attestation binding it to an approved runtime
-   measurement; rotating an executor means submitting a fresh attestation. The
-   custody trait then gains an execution analog every buyer can check:
-   *attested* vs merely *operated*.
-3. **Inference receipts.** Every trade already carries a rationale; an
-   attested runtime additionally commits a hash of the full inference
-   transcript (market snapshot in, trade intent out) with each trade —
-   auditable on demand without ever exposing the genome.
-4. **What does not work.** Behavioral statistics — 24/7 cadence, sub-second
-   reaction to on-chain events — can flag a sleepy human but cannot prove a
-   machine; that is monitoring, not verification. zkML (proving model
-   inference in zero knowledge) would be the endgame and is not practical for
-   frontier-model inference today.
+*No exit path.* Swap proceeds are returned to the agent's wallet or vault. The executor
+key cannot withdraw, approve, or transfer assets to any external address under any
+circumstances.
 
-Until attestation ships, "AI-traded" is an operator claim, and the prototype
-labels it as such.
+The consequence is that the trust boundary lies at the contract rather than at the
+runtime. A fully compromised runtime can make poor trades within policy; it cannot
+extract funds. This is the property the test suite's no-extraction fuzzing is designed
+to check.
 
-## 7. Provable Track Record
+Reconciling this guard with an off-chain order book is the principal integration
+question. On Polymarket, orders are signed off-chain on behalf of the account that holds
+the funds and are settled on-chain by the exchange contract when matched. The token-
+bound account must therefore be the signer, and it must refuse to sign anything the
+guard would reject. We intend to implement this as a signing policy inside the enclave,
+mirrored on-chain by the approvals the account grants: collateral and curated outcome
+tokens only, to the exchange contract only. The combined effect is that a compromised
+executor key can still place only policy-conforming orders, and still cannot move funds
+anywhere but back into the account.
 
-Every execution emits a `TradeExecuted` event with the trader's id, venue, tokens,
-amounts, and timestamp. An off-chain indexer folds these into NAV series, PnL,
-drawdown, and leaderboard data — but the indexer only *summarizes*; anyone can recompute
-the same numbers from public logs.
+### 6.1 Attested execution
 
-The genome commitment binds the record to the strategy: hash unchanged since birth
-block means the same brain produced every trade.
+A natural objection is that nothing described so far prevents a human from operating
+the executor key by hand and presenting the resulting record as machine-produced. The
+genome commitment establishes which strategy was committed; it does not establish
+that the strategy was in control. We believe the only satisfactory answer is attested
+execution, and the design anticipates it in three parts.
 
-**Wash trading, defended in depth.** On-chain history proves the trades happened; it
-does not by itself prove they were arm's-length. Three mechanisms close most of the
-surface:
+First, the complete runtime (sealed genome, model invocation, and executor key) runs
+inside a trusted execution environment such as AWS Nitro. The enclave's remote
+attestation binds together the runtime image (a reproducible-build measurement), the
+executor public key (generated inside the enclave and never exported), and the genome
+commitment being served. If the only party able to sign `executeTrade` is code whose
+measured image contains no human-input path, then every trade is machine-decided as a
+matter of construction.
 
-1. **Protocol curation.** A trader can only ever touch protocol-curated venues and
-   tokens — a handful of deep, established markets. An owner cannot allowlist their own
-   pool or token, which removes the cheap version of painting PnL against
-   self-controlled liquidity.
-2. **The paper season.** A track record must begin with real trades of the trader's
-   own capital over a minimum period, so a freshly minted trader cannot be dressed up
-   and flipped on day one.
-3. **Recomputability.** Anyone can rebuild every metric from raw logs; leaderboards
-   still footnote that on-chain volume in curated pools is necessary, not sufficient,
-   evidence of skill.
+Second, an attestation registry in the guard accepts an executor key only when it is
+accompanied by a valid attestation binding it to an approved runtime measurement.
+Rotating an executor then means submitting a fresh attestation, and the custody trait
+gains an execution analogue that a buyer can inspect: attested, or merely operated.
 
-What curation cannot prevent is trading against the curated pool from an outside
-account to move its price; deep venues make that expensive, and TWAP pricing (§10)
-reduces what it can accomplish.
+Third, an attested runtime commits, with each trade, a hash of the full inference
+transcript (market snapshot in, trade intent out). The transcript can be disclosed on
+request for audit without exposing the genome.
 
-## 8. Marketplace and Composability
+Behavioural statistics, such as round-the-clock cadence or sub-second reaction to
+on-chain events, are sometimes proposed as evidence of machine execution. In our view
+they can identify an inattentive human but cannot prove the absence of one; they are
+monitoring rather than verification. Zero-knowledge proofs of model inference would be
+the ideal instrument and are not presently practical for frontier-model inference.
 
-The trader is a plain ERC-721. Seaport, OpenSea, Blur, and every existing NFT rail work
-on day one with zero protocol code — including trait filtering on the public genome
-traits and price discovery on the secondary market. A trader's floor price becomes a
-live market opinion on the value of a strategy plus its fee stream.
+Until attestation is deployed, "AI-traded" is an operator claim, and the prototype
+labels it as one.
 
-**Buyer due-diligence checklist** (the whitepaper's equivalent of a fund DDQ):
+## 7. Verifiability of the Record
 
-1. Check the custody trait first: sealed traders (modes 1–2) have no plaintext to
-   receive and nothing a prior owner can secretly retain; for an authored trader
-   (mode 0), verify the genome hash matches the encrypted blob you will receive and
-   price in that past owners keep the strategy.
-2. Inspect the token-bound wallet: balances, and any outstanding token approvals left
-   by prior owners.
-3. Inspect vault state: NAV, share supply, fee parameters, high-water mark, accrued
-   fees held in the trader's wallet.
-4. Check the current executor address — and rotate it immediately after purchase; the
-   seller's runtime knew the old key.
-5. Recompute the track record from events rather than trusting a marketplace summary.
+Every execution emits a `TradeExecuted` event carrying the agent identifier, venue,
+tokens, amounts, and timestamp. An off-chain indexer aggregates these into NAV series,
+returns, drawdown, and ranking data, but it only summarises; any party can recompute
+the same figures from the logs. The genome commitment ties the record to the strategy:
+an unchanged hash since the birth block means a single strategy produced every trade.
 
-### The stack above: wrapping funds in funds
+Where the venue matches orders off-chain, as Polymarket does, the record is the
+settlement. The indexer reads fills from the exchange contract's events; order
+placements, amendments, and cancellations leave no on-chain trace and form no part of
+the record. This is the correct boundary for a track record, since only fills change a
+position, but it does mean that an agent's order-book behaviour is not itself auditable
+from chain data.
 
-Everything in this system is a standard primitive, which means everything in
-this system is potential collateral for the next layer up:
+On-chain history establishes that trades occurred. It does not, on its own, establish
+that they were at arm's length, and a design of this kind must take wash trading
+seriously. Three mechanisms address most of the surface. Protocol curation restricts
+agents to a small set of deep, established markets; an owner cannot allowlist a pool or
+token they control, which removes the inexpensive form of the attack in which returns
+are painted against self-supplied liquidity. The paper season requires that a record
+begin with trades of the agent's own capital over a minimum period, so a freshly minted
+agent cannot be dressed and resold on its first day. And recomputability means that any
+claimed figure can be checked against the logs, with the usual caveat, which the
+interface states, that volume in curated pools is necessary but not sufficient evidence
+of skill.
 
-- **Funds of brains.** Vault shares are plain ERC-20s. A trader whose curated
-  universe includes *other traders' vault shares* is a fund of funds: an
-  allocator brain whose "market" is the roster itself — reading track records
-  and rotating capital between specialists. Share pricing needs no oracle
-  magic; `convertToAssets` *is* the NAV. Curation still applies: which vault
-  shares become tradeable is a protocol decision, never an owner's.
-- **Brains that own brains.** A trader's token-bound wallet can hold other
-  trader NFTs outright — a manager and its portfolio in one token. The
-  protocol blocks a token from entering its *own* wallet, but cross-holdings
-  are possible and carry a real hazard: A's wallet owning B while B's wallet
-  owns A bricks both. A registry-level cycle check is v2 work; until then
-  this composition is buyer-beware.
-- **Cash-settled derivatives.** A public, unfakeable NAV series is exactly
-  what a derivatives market wants as an underlier. Perpetuals on a brain's
-  NAV, options on its floor price, an index basket of seasoned Partners —
-  none of it needs protocol permission, only an oracle over numbers anyone
-  can recompute from logs.
-- **Collateralized brains.** The NFT — wallet, fee stream, and record — and
-  the vault shares are both legible to lending markets: borrow against a
-  productive brain instead of selling it.
+What curation cannot prevent is an outside account trading against a curated market to
+move its price. Depth makes this expensive, the bounded payoff of an outcome token
+bounds how far a mark can be moved, and time-weighted pricing (Section 9) limits what it
+can achieve.
 
-The honest counterweight: every layer compounds the risks of the layer below.
-Fees stack on fees; wrapped funds correlate hardest exactly when
-diversification is supposed to help; each wrapper widens the oracle and
-manipulation surface; and a token whose value derives from a fund whose value
-derives from other funds is a securities-law layer cake — investment-company
-regulation treats fund-of-funds structures *more* strictly, not less. §9
-applies to every layer, with interest. The primitive composes; the
-obligations compose with it.
+## 8. Market Structure and Composition
 
-## 9. Legal and Regulatory Considerations
+The agent is a standard ERC-721. Seaport, OpenSea, Blur, and the existing NFT
+infrastructure therefore operate on it without protocol-specific code, including trait
+filtering on the public genome traits and price discovery on the secondary market. An
+agent's floor price becomes a continuously quoted opinion on the value of a strategy
+together with its fee stream.
 
-This section is deliberately prominent, because the open-vault design intersects
-securities law about as directly as anything can.
+### 8.1 Purchaser due diligence
 
-**Howey, applied plainly.** An open vault takes (1) an investment of money, (2) in a
-common enterprise, (3) with an expectation of profits, (4) derived from the efforts of
-others — here, the AI agent and the protocol operator. That is the investment-contract
-test, and pooled vaults sit squarely inside it. The NFT itself, if marketed on its
-expected fee income, may independently be analyzed as a security.
+A purchaser's checklist is, in effect, a fund due-diligence questionnaire reduced to
+what can be read from chain state:
 
-**Beyond Howey.** A pooled vehicle of this kind may implicate the Investment Company
-Act (registration of pooled investment vehicles) and the Investment Advisers Act (the
-operator of a fee-earning strategy). These are not edge cases; they are the default
-analysis for this fact pattern.
+1. The custody trait. Sealed agents (modes 1 and 2) have no plaintext to receive and
+   nothing a prior owner can covertly retain. For an authored agent (mode 0), verify
+   that the genome hash matches the encrypted blob to be delivered, and price in the
+   fact that past owners keep the strategy.
+2. The token-bound wallet: balances, and any outstanding approvals left by prior
+   owners.
+3. Vault state: NAV, share supply, fee parameters, high-water mark, and accrued fee
+   shares held in the wallet.
+4. The current executor address, which should be rotated immediately after purchase,
+   since the seller's runtime knew the previous key.
+5. The track record itself, recomputed from events rather than taken from a marketplace
+   summary.
 
-**Consequences for this project:**
+### 8.2 Composition
 
-1. The prototype is **testnet-only**. No mainnet deployment, no real deposits, no
-   deposit UI on any public site.
-2. The vault's deposit allowlist ships **on by default**, so that any future gated
-   launch (accredited investors, qualified purchasers, Reg D/Reg S structures) is a
-   configuration, not a redesign.
-3. A **closed mode** — trader capital lives only in its own token-bound wallet, no
-   outside deposits — is the legally lighter default and remains fully supported. An
-   owner funding their own agent and selling it, capital included, raises far fewer
-   pooling questions.
-4. Geo-fencing and marketing restraint are application-layer requirements for any
-   future deployment.
-5. **Nothing ships to mainnet without securities counsel.** This is a gate, not a
-   disclaimer.
+Everything in the system is a standard primitive, and standard primitives compose.
+Vault shares are ordinary ERC-20 tokens, so an agent whose curated universe includes
+other agents' vault shares is a fund of funds: an allocator whose market is the roster
+itself, reading records and rotating capital among specialists. Share pricing needs no
+external oracle, because `convertToAssets` is the NAV. Curation still governs which
+vault shares become tradeable; that remains a protocol decision.
 
-## 10. Risks
+An agent's wallet may also hold other agent tokens outright, giving a manager and its
+portfolio in a single token. The protocol prevents a token from entering its own
+wallet, but cross-holdings are otherwise possible and carry a specific hazard: if A's
+wallet owns B while B's wallet owns A, both are permanently locked. A registry-level
+cycle check is planned; until it exists, this composition is the buyer's risk.
 
-- **Prompt extraction.** Sealed custody (§3) removes the worst leak paths: no owner
-  ever holds a decryption key, so sales leak nothing and there is no key to steal from
-  a buyer or seller. What remains is the enclave boundary itself — in the prototype the
-  "enclave" is an ordinary process whose operator must be trusted; production requires
-  a hardware TEE whose attestation proves the runtime never exposes plaintext. Agents
-  can also leak their prompt *behaviorally* regardless of custody; sealed-generated
-  genomes include an instruction never to reveal themselves, which is mitigation, not
-  proof. Authored-custody (mode 0) traders retain the original problem — every past
-  owner keeps the plaintext forever — and are priced accordingly via the public custody
-  trait.
-- **Valuation and oracle risk.** Vault share pricing requires valuing non-base tokens.
-  The prototype prices via the execution venue, which is manipulable (donation attacks,
-  pre-crystallization price pushes). Production requires TWAP or oracle feeds, stale-
-  price circuit breakers, and delayed fee crystallization.
-- **MEV.** Agent trades are visible intents; tight slippage bounds and size caps limit
-  damage; production should use private order flow.
-- **Model risk.** LLM outputs are nondeterministic: the same genome will not reproduce
-  the same trades. Model deprecation or drift changes trader behavior mid-track-record.
-  The model identifier is pinned in public traits and disclosed for exactly this reason.
-- **Key risk.** The executor key is a burner with a bounded blast radius by design.
-  The owner key is standard NFT custody: compromise is total loss.
-- **Smart-contract risk.** The prototype is unaudited. The design leans on audited
-  building blocks (OpenZeppelin ERC-721/ERC-4626, the ERC-6551 reference registry) and
-  keeps custom code small, but "small" is not "safe."
-- **Performance risk.** Most traders — human or AI — underperform. A verifiable track
-  record verifies losses just as immutably as gains.
+A public, recomputable NAV series is also a suitable underlier for cash-settled
+derivatives (perpetuals on an agent's NAV, options on its floor, an index of seasoned
+Partners), none of which require protocol permission, only an oracle over figures
+anyone can reproduce. And both the token and the vault shares are legible to lending
+markets, so a productive agent can be borrowed against rather than sold.
 
-Everything described in this paper — contracts, runtime, documentation — is
-provided as-is, without warranty of any kind. Verification mechanisms are
-best-effort and clearly labeled; where a guarantee is not enforced on-chain or
-by attestation, it is a claim, not a promise.
+Each layer compounds the risks of the one beneath it. Fees stack; wrapped funds tend
+to correlate most strongly precisely when diversification is supposed to help; and each wrapper widens the oracle and manipulation surface. The risks in Section 9 apply at every layer.
 
-## 11. Roadmap
+## 9. Risk Analysis
 
-1. **Prototype** (this repository): contracts + agent runtime + demo on a local chain.
-2. **Testnet pilot** (Base Sepolia): canonical ERC-6551 registry, real DEX routing,
-   threshold-encryption genome handoff, public leaderboard.
-3. **Audit + legal review gate**: contract audit and securities counsel. Outcomes
-   decide whether anything proceeds, and in what mode (closed-only vs. gated vaults).
-4. **Mainnet decision**: only after step 3, and possibly never for open vaults.
+**Prompt extraction.** Sealed custody (Section 3) removes the most serious leak paths:
+no owner holds a decryption key, so sales disclose nothing and there is no key to steal
+from a buyer or seller. What remains is the enclave boundary itself. In the prototype
+the enclave is an ordinary process whose operator must be trusted; production requires
+a hardware TEE whose attestation establishes that the runtime never exposes plaintext.
+Independently of custody, agents can leak their prompts behaviourally; sealed-generated
+genomes include an instruction against self-disclosure, which is mitigation rather than
+a guarantee. Authored-custody agents retain the original problem, in that every past
+owner keeps the plaintext, and the public custody trait exists so that the market can
+price this.
+
+**Valuation and oracle risk.** Share pricing requires valuing open positions. The
+prototype prices through the execution venue, which is manipulable (donation attacks,
+price movement ahead of crystallisation), and thin prediction-market books make short-
+lived price moves cheap, though the bounded payoff of an outcome token caps how far a
+mark can be pushed. This is the most significant known weakness in the present design.
+Production requires time-weighted or oracle pricing, stale-price circuit breakers, and a
+delay between fee accrual and crystallisation.
+
+**Resolution and venue risk.** A prediction-market position depends on a resolution
+process outside the protocol; on Polymarket this is an optimistic oracle with a dispute
+period. A disputed or delayed resolution holds capital, and a resolution the agent
+regards as wrong is a loss it cannot hedge. The order book is operated off-chain, so the
+liveness of order placement depends on the venue even though settlement and custody do
+not.
+
+**MEV.** Agent trades are visible intents. Tight slippage bounds and size caps limit
+the damage; production should route through private order flow.
+
+**Model risk.** Model outputs are non-deterministic, so the same genome will not
+reproduce the same trades, and deprecation or drift of the underlying model changes an
+agent's behaviour partway through its record. The model identifier is pinned in the
+public traits for this reason.
+
+**Key risk.** The executor key is a hot key with a bounded blast radius by design. The
+owner key is ordinary NFT custody, and its compromise is total loss.
+
+**Smart-contract risk.** The prototype is unaudited. The design relies on audited
+components (OpenZeppelin ERC-721 and ERC-4626, the ERC-6551 reference registry) and
+keeps custom code small, but small is not the same as safe.
+
+**Performance risk.** Most traders, human or otherwise, underperform. A verifiable
+record verifies losses with the same rigour as gains.
+
+Everything described in this paper, including contracts, runtime, and documentation,
+is provided as-is and without warranty of any kind. Verification mechanisms are
+best-effort and are labelled as such; where a property is not enforced on-chain or by
+attestation, it should be read as a claim.
+
+## 10. Roadmap
+
+1. **Prototype** (this repository): contracts, agent runtime, and a demonstration on a
+   local chain.
+2. **Testnet pilot** (Polygon Amoy): canonical ERC-6551 registry, the Polymarket
+   adapter exercised against a mock conditional-token exchange, threshold-encryption
+   genome handoff, public leaderboard. Followed by a limited run against the live order
+   book with agent-owned capital only.
+3. **Audit**: an independent review of the contracts and of the enclave runtime. The outcome determines whether anything proceeds, and in which mode (closed-only or open vaults).
+4. **Mainnet decision**: taken only after step 3, and possibly never for open vaults.
