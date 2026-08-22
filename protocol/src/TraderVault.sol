@@ -144,6 +144,32 @@ contract TraderVault is ERC4626 {
         _checkpoint(msg.sender);
     }
 
+    /// @notice What a checkpoint would mint right now, without minting it:
+    /// management shares, performance shares, and the ringer's 1% cut of the
+    /// total. Mirrors _checkpoint exactly so a keeper (or the Terminal) can
+    /// show the reward before ringing.
+    function pendingFees() external view returns (uint256 mgmtShares, uint256 perfShares, uint256 bellReward) {
+        uint256 supply = totalSupply();
+        if (supply == 0) return (0, 0, 0);
+
+        uint256 elapsed = block.timestamp - lastCheckpoint;
+        if (elapsed > 0 && managementFeeBps > 0) {
+            uint256 frac = (uint256(managementFeeBps) * elapsed * WAD) / (BPS * YEAR);
+            mgmtShares = (supply * frac) / (WAD - frac);
+        }
+
+        uint256 supplyAfterMgmt = supply + mgmtShares;
+        uint256 assets = totalAssets();
+        uint256 pps = (assets * WAD) / supplyAfterMgmt;
+        if (pps > highWaterMark && performanceFeeBps > 0) {
+            uint256 gainAssets = ((pps - highWaterMark) * supplyAfterMgmt) / WAD;
+            uint256 feeAssets = (gainAssets * performanceFeeBps) / BPS;
+            perfShares = (feeAssets * supplyAfterMgmt) / (assets - feeAssets);
+        }
+
+        bellReward = ((mgmtShares + perfShares) * BELL_REWARD_BPS) / BPS;
+    }
+
     function _checkpoint(address ringer) internal {
         uint64 nowTs = uint64(block.timestamp);
         uint256 supply = totalSupply();

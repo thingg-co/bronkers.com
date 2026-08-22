@@ -26,7 +26,7 @@ flowchart LR
         CLAUDE[Claude API]
         SS[SecretStore - encrypted genome]
         IDX[Indexer / report.ts]
-        SITE[darkly.fund static site]
+        SITE[brokners.com static site]
     end
     SS -->|decrypt + verify hash| RT
     RT -->|market snapshot + genome| CLAUDE
@@ -65,7 +65,9 @@ struct Genome {
   the token's `TraderVault` clone, registers default guard policy, emits `TraderBorn`.
 - `MAX_SUPPLY = 4096` — the collection is hard-capped ("one brain per bit"); mint
   reverts once `nextId` reaches it.
-- `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)` — getters.
+- `genomeOf(id)`, `accountOf(id)` (TBA address), `vaultOf(id)`, `nameOf(id)` — getters.
+- `christen(id, name)` — owner-only, once, ≤ 32 bytes; cosmetic and permanent, so a
+  record cannot be laundered by renaming.
 - `_update()` override — checkpoints the vault's fee accrual before every transfer, so
   accrued-but-unminted fees are crystallized under the seller's watch.
 - **No genome mutation path exists.** Immutability = provenance.
@@ -133,6 +135,9 @@ so administrative control follows the token automatically on transfer.
     per-share **high-water mark**; HWM ratchets up only.
   - fee shares are minted **to the trader's TBA** — accrued fees travel with the NFT,
     and there is no fee-sniping window around transfers.
+  - `pendingFees()` — view: the management shares, performance shares and ringer reward
+    the next checkpoint would mint; mirrors `_checkpoint` exactly (Views.t.sol) so the
+    Terminal can show a keeper the reward before ringing.
   - `ringTheBell()` — the rewarded public crank: identical to `checkpoint()` except
     1% of the fee shares crystallized by that call mint to the caller instead of the
     TBA (`BELL_REWARD_BPS`). LP dilution is identical either way; the ringer's cut
@@ -216,6 +221,12 @@ load config → SecretStore.decrypt(genome) → verify hash vs on-chain commitme
   owner key never touches the runtime.
 - `report.ts` scans `TradeExecuted`/`Deposit` events and writes `data/traders.json`
   for the static site — the site renders, never computes.
+
+## 4b. The Terminal
+
+`app.html` + `js/terminal/` is the browser client: read-only over the chain's RPC,
+writes through the wallet, no backend. Structure, behaviour and the dev loop are in
+[terminal.md](terminal.md).
 
 ## 5. Transfer flows
 

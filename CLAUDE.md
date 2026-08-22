@@ -7,8 +7,9 @@ session needs to know that the code doesn't say.
 - Everything is **Brokners** ("like brokers, but misspelled") — site, docs,
   contracts, on-chain collection name ("Brokners"/"BRKNR", vault shares
   "Brokner Vault #N"/"bknrN"). Never introduce a second product name.
-- **Darkly Fund** appears only as plain-text attribution in footers and legal
-  disclosures — never as a link, never as branding.
+- No "Darkly Fund" or "thingg" references anywhere in the repo (scrubbed
+  Aug 2026 at the owner's request). Brokners stands alone; the git remote
+  org name is the one thing we cannot change from here.
 
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the
@@ -20,16 +21,22 @@ session needs to know that the code doesn't say.
    securities counsel first. This gate has been explicitly maintained even
    when shortcuts were suggested; hold it. ("Others do it" ≠ legal.)
 3. **No backend for the app.** app.html (The Terminal) is a zero-build dapp:
-   viem via esm.sh CDN, wallet talks straight to contracts, addresses in
-   js/config.js + localStorage. The only off-chain processes are the agent
-   runtime (the "enclave") and the optional static data/traders.json from
-   agent report.ts. Keep it that way.
+   ES modules in js/terminal/ (chain, data, actions, crypto, venues, ui,
+   views/{floor,brain,create,desk,dev}), viem via esm.sh, reads over the
+   chain's public RPC (works with no wallet), writes through the wallet.
+   Config lives in js/config.js (`chains: {id: {rpc, explorer, addresses,
+   enclavePublicKey}}`) with per-chain localStorage overrides from the
+   Developer tab. The only off-chain processes are the agent runtime (the
+   "enclave") and the optional static data/traders.json from agent report.ts
+   (the Terminal's offline snapshot). docs/terminal.md is the spec. Dev loop:
+   `anvil` + protocol/script/seed-dev.sh (rewrites the anvil block of
+   js/config.js). Keep it that way.
 4. **Zero build tooling for the site.** Plain HTML/CSS/JS, GitHub Pages from
    repo root (CNAME → brokners.com, .nojekyll). **One stylesheet:
    css/brokners.css**, loaded by every page; no inline `<style>` blocks
    anywhere (consolidated Aug 2026 from base/themes/components/main + three
-   per-page inline blocks). Tokens descend from darkly.fund (golden-ratio
-   spacing/type scale) with the Brokners identity baked in: "typo pink"
+   per-page inline blocks). Golden-ratio spacing/type scale with the
+   Brokners identity baked in: "typo pink"
    accent (#d6336c light / #f06595 dark), Bricolage Grotesque h1–h3, the
    tilted pink N (.typo-n). Horizontal page padding is defined once, on
    `.container`; documents are `<main><div class="container"><article
@@ -40,7 +47,7 @@ session needs to know that the code doesn't say.
    agent/src/genome.ts is the reference, mirrored in app.html). Changing it
    breaks every on-chain commitment.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 42 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 47 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 supply cap ("one brain per bit").
@@ -54,12 +61,14 @@ session needs to know that the code doesn't say.
 - Seat tiers (Intern 20% / Associate 30% / Partner 50% notional ceilings),
   activate() is owner-only, upgrade-only, fee to treasury.
 - Custody trait: 0 authored / 1 sealed-authored / 2 sealed-generated (ECIES
-  x25519→HKDF→AES-GCM to the enclave key; agent/src/enclave.ts; browser mint
-  does authored only).
+  x25519→HKDF→AES-GCM to the enclave key, HKDF info "brokners-genome-v2";
+  agent/src/enclave.ts and js/terminal/crypto.js are byte-compatible — the
+  browser mints authored and sealed; sealed-generated is CLI-only).
+- Read-side views added for the Terminal: `TraderVault.pendingFees()` (what
+  the next checkpoint mints + the ringer's cut) and `TraderNFT.christen/nameOf`
+  (owner-only, once, ≤32 bytes). Views.t.sol.
 
 ## Related, outside this repo
-- darkly.fund repo (../darkly.fund) links here from its nav; keep it
-  institutional — no Brokners content there beyond the link.
 - Whitepaper artifact (private share link, same content as
   docs/whitepaper.html): https://claude.ai/code/artifact/2287404c-5a78-4766-9d09-0a53f06f6d56
   docs/whitepaper.html is the editable source of truth for the styled paper

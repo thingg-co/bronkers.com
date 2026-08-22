@@ -1,0 +1,148 @@
+// My Desk: what you own, what you've deposited, and which bells are worth ringing.
+import { formatUnits } from "https://esm.sh/viem@2.21.19";
+import * as act from "../actions.js";
+import { TIERS } from "../abi.js";
+import { state } from "../chain.js";
+import { invalidate, loadBrain, loadRoster, ringable } from "../data.js";
+import { addrChip, amountField, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, toast } from "../ui.js";
+import { custodyBadge, jar, statusBadge } from "./floor.js";
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+async function run(title, steps, refresh, summary) {
+  const ok = await act.runSteps(title, steps, { summary });
+  if (ok) await refresh();
+}
+
+function manage(brain, refresh) {
+  const mk = (title, ...children) => el("div", { class: "panel" }, el("h4", {}, title), ...children);
+  const ex = state.cfg.explorer;
+
+  // wallet (own book)
+  const fundField = amountField({ label: "Fund the brain's wallet", max: formatUnits(brain.my.usdc, 18), maxLabel: `balance ${fmt.amt(brain.my.usdc)}` });
+  const walletPanel = mk("The brain's wallet (its own book)",
+    kv([
+      ["Address", addrChip(brain.tba, { explorer: ex })],
+      ["mUSDC", fmt.amt(brain.tbaUsdc)],
+      ...brain.holdings.map((h) => [h.sym, fmt.amt(h.tbaBal, 18, 4)]),
+      ["Guard authorised", brain.tbaAuthorised ? badge("yes", "good") : badge("no", "bad")],
+    ]),
+    !brain.tbaAuthorised ? el("p", { class: "muted" }, "The guard needs a one-time approval from the brain's wallet before the runtime can trade its own book.") : null,
+    el("div", { class: "btn-row" },
+      !brain.tbaAuthorised ? el("button", { class: "btn primary", onclick: () => run("Authorise the guard", act.authoriseGuard(brain), refresh) }, "Authorise the guard") : null,
+      [brain.tbaUsdc > 0n ? el("button", { class: "btn", onclick: () => run("Sweep", act.sweep(brain, state.cfg.usdc, brain.tbaUsdc, "mUSDC"), refresh) }, `Sweep ${fmt.amt(brain.tbaUsdc)} mUSDC to me`) : null],
+      brain.holdings.filter((h) => h.tbaBal > 0n).map((h) => el("button", { class: "btn", onclick: () => run("Sweep", act.sweep(brain, h.token, h.tbaBal, h.sym), refresh) }, `Sweep ${fmt.amt(h.tbaBal, 18, 4)} ${h.sym}`))),
+    el("div", { class: "inline-form" }, fundField.el, el("button", { class: "btn", onclick: async () => { try { await run("Fund", act.fundTba(brain, fundField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Send")));
+
+  // runtime
+  const execField = textField({ label: "Executor key (address)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, hint: "The hot key the runtime signs with. It can only call executeTrade. If you bought this brain, rotate it now." });
+  const runtimePanel = mk("Runtime",
+    kv([["Current executor", brain.policy.executor === ZERO ? badge("not set", "bad") : addrChip(brain.policy.executor, { explorer: ex })]]),
+    el("div", { class: "inline-form" }, execField.el, el("button", { class: "btn", onclick: () => { const a = execField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err"); run("Set executor", act.setExecutor(brain.id, a), refresh); } }, "Set")),
+    el("p", { class: "muted small" }, "Start the runtime with the command in the Developer tab. Cadence declared: ", `${brain.genome.cadence}/day.`));
+
+  // identity: name + seat
+  const nameField = textField({ label: "Name (permanent)", placeholder: "Umbra" });
+  const seatPanel = mk("Seat & name",
+    kv([["Seat", `${TIERS[brain.tier]} · per-trade cap ${fmt.bps(brain.policy.maxNotionalBps)} of NAV`], ["Name", brain.name || badge("unnamed", "muted")]]),
+    el("div", { class: "btn-row" },
+      brain.tier < 2 ? el("button", { class: "btn", onclick: async () => {
+        const { steps, fee } = await act.promote(brain);
+        const m = modal({ title: `Promote to ${TIERS[brain.tier + 1]}`, body: el("div", {}, el("p", {}, `A ${TIERS[brain.tier + 1]} seat raises the per-trade ceiling. Upgrades are one-way.`), kv([["One-time fee", fmt.usd(fee)], ["Paid to", "protocol treasury"]])),
+          actions: [{ label: "Cancel" }, { label: "Promote", kind: "primary", onClick: async () => { m.close(); await run("Promote", steps, refresh); } }] });
+      } }, `Promote to ${TIERS[brain.tier + 1]}`) : null),
+    !brain.name ? el("div", { class: "inline-form" }, nameField.el, el("button", { class: "btn", onclick: () => { const n = nameField.value(); if (!n) return; run("Name", act.christen(brain.id, n), refresh); } }, "Christen")) : null);
+
+  // depositors
+  const addrField = textField({ label: "Allow a depositor", placeholder: "0x…", mono: true });
+  const depositorsPanel = mk("Depositors",
+    kv([["Vault", brain.allowlistEnabled ? "allowlist only" : "open to anyone"], ["AUM", fmt.usd(brain.nav)], ["Season", brain.seasoned ? "seasoned — accepting deposits" : "intern — deposits closed"]]),
+    el("div", { class: "btn-row" },
+      el("button", { class: "btn", onclick: () => run(brain.allowlistEnabled ? "Open the vault" : "Close the vault", act.setAllowlistEnabled(brain, !brain.allowlistEnabled), refresh) }, brain.allowlistEnabled ? "Open to anyone" : "Restrict to allowlist")),
+    brain.allowlistEnabled ? el("div", { class: "inline-form" }, addrField.el, el("button", { class: "btn", onclick: () => { const a = addrField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err"); run("Allow depositor", act.setDepositAllowed(brain, a, true), refresh); } }, "Allow")) : null);
+
+  // limits + markets
+  const notional = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxNotionalBps });
+  const slippage = el("input", { type: "number", min: 0, max: 10000, value: brain.policy.maxSlippageBps });
+  const interval = el("input", { type: "number", min: 0, value: brain.policy.minTradeInterval });
+  const limitsPanel = mk("Trading limits",
+    el("p", { class: "muted small" }, "You can tune below your seat's ceiling, never above. Markets can be switched off, and only curated ones switched back on."),
+    el("div", { class: "three-col" },
+      el("label", { class: "field" }, el("span", { class: "field-label" }, "Per-trade cap (bps of NAV)"), notional),
+      el("label", { class: "field" }, el("span", { class: "field-label" }, "Max slippage (bps)"), slippage),
+      el("label", { class: "field" }, el("span", { class: "field-label" }, "Min seconds between trades"), interval)),
+    el("div", { class: "btn-row" }, el("button", { class: "btn", onclick: () => run("Update limits", act.setPolicy(brain.id, Number(notional.value), Number(slippage.value), Number(interval.value)), refresh) }, "Save limits")),
+    el("div", { class: "btn-row" }, brain.holdings.map((h) => el("button", { class: "btn", onclick: async () => {
+      const allowed = await state.pub.readContract({ address: state.cfg.guard, abi: (await import("../abi.js")).guardAbi, functionName: "tokenAllowed", args: [BigInt(brain.id), h.token] });
+      run(allowed ? "Disable market" : "Enable market", act.setTokenAllowed(brain.id, h.token, !allowed), refresh);
+    } }, `Toggle ${h.sym}`))));
+
+  // fees + sell
+  const toField = textField({ label: "Transfer to (sell the whole guy)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital." });
+  const feesPanel = mk("Fees & sale",
+    kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`]]),
+    el("div", { class: "btn-row" },
+      brain.fees.feeShares > 0n ? el("button", { class: "btn", onclick: () => run("Redeem fee shares", act.redeemFeeShares(brain), refresh) }, "Redeem fee shares to me") : null,
+      ringable(brain) ? el("button", { class: "btn", onclick: () => run("Ring the bell", act.ring(brain), refresh) }, "🔔 Ring the bell") : null),
+    el("div", { class: "inline-form" }, toField.el, el("button", { class: "btn danger", onclick: () => {
+      const a = toField.value(); if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return toast("Enter an address.", "err");
+      const m = modal({ title: "Transfer this brain?", body: el("p", {}, `${brain.label} and everything in its wallet (${fmt.amt(brain.tbaUsdc)} mUSDC and any holdings) will belong to ${fmt.addr(a)}. The track record goes with it. This cannot be undone.`),
+        actions: [{ label: "Cancel" }, { label: "Transfer", kind: "danger", onClick: async () => { m.close(); await run("Transfer", act.transferBrain(brain, a), refresh); } }] });
+    } }, "Transfer")));
+
+  return el("section", { class: "desk-brain", id: `brain-${brain.id}` },
+    el("header", { class: "brain-head compact" }, jar(), el("div", { class: "brain-title" },
+      el("h3", {}, el("a", { href: `#/brain/${brain.id}` }, brain.label), " ", el("span", { class: "tier-chip" }, TIERS[brain.tier])),
+      el("p", { class: "card-badges" }, statusBadge(brain), custodyBadge(brain)))),
+    el("div", { class: "two-col" }, walletPanel, runtimePanel),
+    el("div", { class: "two-col" }, seatPanel, depositorsPanel),
+    limitsPanel, feesPanel);
+}
+
+export async function render(root, { id } = {}) {
+  clear(root);
+  root.append(el("h3", { class: "section-sub" }, "My Desk"));
+  if (!state.account) {
+    root.append(emptyState("Connect a wallet to see your brains, positions, and bells.", el("p", { class: "muted" }, "On a local anvil you can use a dev key from the Developer tab.")));
+    return;
+  }
+  const loading = spinner("Reading your desk…");
+  root.append(loading);
+  let roster;
+  try { roster = await loadRoster(); } catch (e) { loading.replaceWith(emptyState("Could not read the chain.", el("p", { class: "muted" }, act.explain(e)))); return; }
+  loading.remove();
+  const refresh = async () => { invalidate(); await render(root, { id }); };
+
+  const mine = roster.brains.filter((b) => b.mine);
+  const positions = roster.brains.filter((b) => b.myShares > 0n);
+  const bells = roster.brains.filter(ringable);
+
+  // owned brains
+  root.append(el("h4", { class: "desk-h" }, `Your brains (${mine.length})`));
+  if (!mine.length) root.append(emptyState("You don't own a brain yet.", el("a", { class: "btn primary", href: "#/create" }, "Birth one")));
+  const target = id ? mine.find((b) => b.id === Number(id)) : null;
+  const show = target ? [target] : mine;
+  if (target) root.append(el("p", { class: "muted" }, el("a", { href: "#/desk" }, "← all your brains")));
+  for (const b of show) {
+    const holder = el("div", {}, spinner(`Loading ${b.label}…`));
+    root.append(holder);
+    loadBrain(b.id).then((full) => holder.replaceWith(manage(full, refresh))).catch((e) => holder.replaceWith(emptyState(`Could not load ${b.label}: ${act.explain(e)}`)));
+  }
+
+  // positions
+  root.append(el("h4", { class: "desk-h" }, `Your positions (${positions.length})`));
+  if (!positions.length) root.append(el("p", { class: "muted" }, "No vault positions. Pick a seasoned brain on the Floor."));
+  else root.append(el("div", { class: "tablewrap" }, el("table", { class: "table" },
+    el("thead", {}, el("tr", {}, el("th", {}, "Brain"), el("th", {}, "Shares"), el("th", {}, "Value"), el("th", {}, "Return"), el("th", {}, ""))),
+    el("tbody", {}, positions.map((b) => el("tr", {},
+      el("td", {}, el("a", { href: `#/brain/${b.id}` }, b.label)),
+      el("td", {}, fmt.amt(b.myShares, 18, 4)),
+      el("td", {}, fmt.usd((b.myShares * b.pps) / 10n ** 18n)),
+      el("td", {}, fmt.pct(b.sharePriceReturn)),
+      el("td", {}, el("button", { class: "btn tiny", onclick: () => run("Withdraw", act.withdrawAll(b), refresh) }, "Withdraw all"))))))));
+
+  // bells
+  root.append(el("h4", { class: "desk-h" }, `Bells worth ringing (${bells.length})`));
+  if (!bells.length) root.append(el("p", { class: "muted" }, "Nothing to crystallise right now."));
+  else root.append(el("div", { class: "btn-row" }, bells.map((b) => el("button", { class: "btn bell", onclick: () => run("Ring the bell", act.ring(b), refresh) }, `🔔 ${b.label} · +${fmt.amt(b.pending.reward, 18, 4)} shares`))));
+}

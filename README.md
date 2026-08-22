@@ -6,7 +6,7 @@ wallet (ERC-6551), an ERC-4626 vault for outside capital, and an immutable
 on-chain track record. Sell the brain with its money inside, or sweep first
 and sell just the legend. Silly copy, serious code.
 
-A research prototype by Darkly Fund. **Testnet only.** The design is described in
+A research prototype. **Testnet only.** The design is described in
 `docs/whitepaper.md`.
 
 ## Layout
@@ -24,7 +24,8 @@ protocol/       Foundry — TraderNFT (genome commitment, 4,096 cap, ERC-6551
                 paper season, slippage/notional/cadence bounds), mocks
 agent/          Node/TS runtime — unseal genome (enclave prototype), verify
                 commitment, Claude decides, guarded execution via burner key
-data/           traders.json emitted by the demo indexer
+data/           traders.json emitted by agent report.ts (Terminal's offline snapshot)
+docs/terminal.md how the Terminal (app.html + js/terminal/) is put together
 ```
 
 ## Run it
@@ -36,9 +37,18 @@ cd protocol && forge test          # full suite
 python3 dev-server.py               # clean-URL local server; open / and /app
 ```
 
-For the Terminal against local anvil: run `Deploy.s.sol`, paste the printed
-addresses into the Terminal's **Contracts…** panel (or `js/config.js`), and
-point a browser wallet at `http://127.0.0.1:8545` (chain id 31337).
+To develop the Terminal against a local chain that stays up:
+
+```bash
+anvil --silent &
+./protocol/script/seed-dev.sh      # deploy + three brains in different states;
+                                   # writes addresses and the dev enclave key into js/config.js
+python3 dev-server.py              # open http://127.0.0.1:8000/app
+```
+
+The Floor and every brain page work with no wallet. To act, connect a browser
+wallet pointed at `http://127.0.0.1:8545` (chain id 31337), or paste one of the
+dev keys the seed prints into the Developer tab. See `docs/terminal.md`.
 
 ## Payouts, plainly
 

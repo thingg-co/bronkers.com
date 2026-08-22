@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="The Brokners Terminal - mint, fund, and manage sealed AI trading brains. Testnet only. No backend: your wallet talks straight to the contracts.">
+    <meta name="description" content="The Brokners Terminal - browse sealed AI trading brains and their on-chain records, allocate to one, or birth your own. Testnet only. No backend: your wallet talks straight to the contracts.">
     <title>Terminal - Brokners</title>
     <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
     <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
@@ -46,55 +46,25 @@
             <div class="container">
                 <p class="hero-eyebrow">Testnet only · no backend · your wallet talks straight to the contracts</p>
                 <h1 class="wordmark">THE TERMI<span class="typo-n">N</span>AL</h1>
-                <p class="page-subtitle">Mint brains. Fund brains. Ring the bell. Pull your money out whenever you like.</p>
+                <p class="page-subtitle">Watch the brains trade. Back one. Birth your own. Ring the bell.</p>
             </div>
         </section>
 
         <section class="section">
             <div class="container">
                 <div class="term-bar">
-                    <span id="netLabel" class="addr">not connected</span>
-                    <span id="acctLabel" class="addr"></span>
-                    <span style="display:flex;gap:var(--space-xs)">
-                        <button id="cfgBtn">Contracts…</button>
-                        <button id="connectBtn">Connect Wallet</button>
+                    <span class="term-status">
+                        <span id="netLabel" class="net boot">…</span>
+                        <span id="acctLabel" class="addr" hidden></span>
                     </span>
+                    <nav class="tabs" id="tabs" aria-label="Terminal sections"></nav>
+                    <span class="term-actions"><button id="connectBtn" class="btn primary">Connect wallet</button></span>
                 </div>
-                <div class="cfg" id="cfgPanel" hidden>
-                    <label>TraderNFT address</label><input id="cfg-traderNFT" placeholder="0x…">
-                    <label>ExecutionGuard address</label><input id="cfg-guard" placeholder="0x…">
-                    <label>mUSDC address</label><input id="cfg-usdc" placeholder="0x…">
-                    <p class="muted">Printed by <code>Deploy.s.sol</code>. Saved per-chain in your browser only.</p>
-                    <button id="cfgSave">Save & reload roster</button>
+                <div id="view" class="view" aria-live="polite">
+                    <div class="loading"><span class="spin"></span> Starting the Terminal…</div>
                 </div>
-                <div class="term-log" id="log"><div>&gt; brokners terminal — ready.</div><div>&gt; connect a wallet to begin.</div></div>
-            </div>
-        </section>
-
-        <section class="section section-well">
-            <div class="container">
-                <h2 class="section-title">The Roster</h2>
-                <p class="roster-note" id="rosterNote">Live from the chain. No indexer, no server — just logs and view calls.</p>
-                <div class="features-grid" id="roster"></div>
-            </div>
-        </section>
-
-        <section class="section">
-            <div class="container">
-                <h2 class="section-title">Birth a Brain</h2>
-                <p class="roster-note">Browser minting uses <em>authored</em> custody (you keep the key). Sealed custody needs the enclave CLI — see the repo.</p>
-                <form class="mint-form" id="mintForm">
-                    <label>The prompt (your brain's secret strategy)</label>
-                    <textarea id="m-prompt" rows="4" required placeholder="You are a patient momentum trader…"></textarea>
-                    <label>Tweaks (JSON, optional)</label>
-                    <input id="m-tweaks" placeholder='{"style":"momentum"}'>
-                    <label>Risk profile</label>
-                    <select id="m-risk"><option value="0">conservative</option><option value="1" selected>balanced</option><option value="2">aggressive</option></select>
-                    <label>Declared cadence (trades/day)</label>
-                    <input id="m-cadence" type="number" min="1" max="255" value="4">
-                    <button type="submit">Compute commitment & mint</button>
-                    <p class="muted">Your prompt never leaves this page: it is hashed and encrypted locally, the encrypted jar downloads to your machine, and only the hash goes on-chain.</p>
-                </form>
+                <p class="console-row"><button id="consoleToggle" class="btn-ghost tiny" type="button">console</button></p>
+                <div id="console" class="term-log" hidden></div>
             </div>
         </section>
     </main>
@@ -102,223 +72,14 @@
     <footer class="footer">
         <div class="container">
             <div class="footer-bottom">
-                <p>Brok<span class="typo-n">n</span>ers is a research prototype by Darkly Fund. Testnet only. Not an offering. Provided as-is, without warranty of any kind. &copy; 2025</p>
+                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026</p>
             </div>
         </div>
     </footer>
 
     <script src="js/theme-switcher.js"></script>
+    <script src="js/main.js"></script>
     <script src="js/config.js"></script>
-    <script type="module">
-        import { createPublicClient, createWalletClient, custom, formatUnits, parseUnits, keccak256, toBytes, parseAbi } from "https://esm.sh/viem@2.21.19";
-
-        const nftAbi = parseAbi([
-            "struct Genome { bytes32 commitment; uint64 birthBlock; uint8 riskProfile; uint8 cadence; uint8 custody; string model; string encryptedPromptCID; }",
-            "function nextId() view returns (uint256)",
-            "function MAX_SUPPLY() view returns (uint256)",
-            "function genomeOf(uint256) view returns (Genome)",
-            "function ownerOf(uint256) view returns (address)",
-            "function vaultOf(uint256) view returns (address)",
-            "function accountOf(uint256) view returns (address)",
-            "function mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
-        ]);
-        const guardAbi = parseAbi([
-            "function tierOf(uint256) view returns (uint8)",
-            "function tiers(uint256) view returns (uint16 maxNotionalBps, uint256 fee)",
-            "function seasoned(uint256) view returns (bool)",
-            "function tradeCountOf(uint256) view returns (uint32)",
-            "function activate(uint256,uint8)",
-            "function setExecutor(uint256,address)",
-        ]);
-        const vaultAbi = parseAbi([
-            "function totalAssets() view returns (uint256)",
-            "function balanceOf(address) view returns (uint256)",
-            "function maxWithdraw(address) view returns (uint256)",
-            "function deposit(uint256,address) returns (uint256)",
-            "function withdraw(uint256,address,address) returns (uint256)",
-            "function ringTheBell()",
-        ]);
-        const erc20Abi = parseAbi([
-            "function approve(address,uint256) returns (bool)",
-            "function allowance(address,address) view returns (uint256)",
-            "function balanceOf(address) view returns (uint256)",
-        ]);
-
-        const CUSTODY = ["authored", "sealed", "sealed-gen"];
-        const TIERS = ["Intern", "Associate", "Partner"];
-        const $ = (id) => document.getElementById(id);
-        const logEl = $("log");
-        function log(msg, cls) {
-            // keep newlines (pane is pre-wrap); strip ANSI sequences and
-            // every other control character that may ride along in errors
-            const clean = String(msg)
-                .replace(/\r\n?/g, "\n")
-                .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
-                .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, "");
-            const line = document.createElement("div");
-            if (cls) line.className = cls;
-            line.textContent = `> ${clean}`;
-            logEl.appendChild(line);
-            logEl.scrollTop = logEl.scrollHeight;
-        }
-
-        let pub, wallet, account, chainId, cfg;
-
-        function loadCfg(id) {
-            const base = (window.BROKNERS_CONFIG || {})[id] || { name: `chain ${id}` };
-            const saved = JSON.parse(localStorage.getItem(`brokners-cfg-${id}`) || "{}");
-            return { ...base, ...saved };
-        }
-
-        async function connect() {
-            if (!window.ethereum) { log("no wallet found — install one, or run against anvil with a browser wallet pointed at http://127.0.0.1:8545", "err"); return; }
-            const transport = custom(window.ethereum);
-            [account] = await window.ethereum.request({ method: "eth_requestAccounts" });
-            chainId = Number(await window.ethereum.request({ method: "eth_chainId" }));
-            cfg = loadCfg(chainId);
-            pub = createPublicClient({ transport });
-            wallet = createWalletClient({ account, transport });
-            $("netLabel").textContent = `${cfg.name} (${chainId})`;
-            $("acctLabel").textContent = `${account.slice(0, 6)}…${account.slice(-4)}`;
-            $("connectBtn").textContent = "Connected";
-            ["traderNFT", "guard", "usdc"].forEach((k) => { $(`cfg-${k}`).value = cfg[k] || ""; });
-            log(`connected ${account} on ${cfg.name}`, "ok");
-            if (!cfg.traderNFT) { log("no contract addresses for this chain — open Contracts… and paste them from Deploy.s.sol", "err"); $("cfgPanel").hidden = false; return; }
-            await loadRoster();
-        }
-
-        async function write(address, abi, functionName, args, label) {
-            log(`${label}…`);
-            const { request } = await pub.simulateContract({ account, address, abi, functionName, args });
-            const hash = await wallet.writeContract(request);
-            await pub.waitForTransactionReceipt({ hash });
-            log(`${label} ✓ ${hash.slice(0, 18)}…`, "ok");
-        }
-
-        async function ensureAllowance(spender, amount, label) {
-            const current = await pub.readContract({ address: cfg.usdc, abi: erc20Abi, functionName: "allowance", args: [account, spender] });
-            if (current < amount) await write(cfg.usdc, erc20Abi, "approve", [spender, amount], `approve mUSDC for ${label}`);
-        }
-
-        async function loadRoster() {
-            const roster = $("roster");
-            roster.innerHTML = "";
-            const [nextId, maxSupply] = await Promise.all([
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "nextId" }),
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "MAX_SUPPLY" }),
-            ]);
-            $("rosterNote").textContent = `${nextId} of ${maxSupply} brains minted. Live from the chain — no indexer, no server.`;
-            if (nextId === 0n) { roster.innerHTML = '<p class="muted">No brains yet. Be the first. Or don\'t. The cap isn\'t going anywhere.</p>'; return; }
-            for (let id = 1n; id <= nextId; id++) renderBrain(id, roster);
-        }
-
-        async function renderBrain(id, roster) {
-            const [g, owner, vaultAddr, tba, tier, seasoned, trades] = await Promise.all([
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "genomeOf", args: [id] }),
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "ownerOf", args: [id] }),
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "vaultOf", args: [id] }),
-                pub.readContract({ address: cfg.traderNFT, abi: nftAbi, functionName: "accountOf", args: [id] }),
-                pub.readContract({ address: cfg.guard, abi: guardAbi, functionName: "tierOf", args: [id] }),
-                pub.readContract({ address: cfg.guard, abi: guardAbi, functionName: "seasoned", args: [id] }),
-                pub.readContract({ address: cfg.guard, abi: guardAbi, functionName: "tradeCountOf", args: [id] }),
-            ]);
-            const [nav, myShares] = await Promise.all([
-                pub.readContract({ address: vaultAddr, abi: vaultAbi, functionName: "totalAssets" }),
-                pub.readContract({ address: vaultAddr, abi: vaultAbi, functionName: "balanceOf", args: [account] }),
-            ]);
-            const mine = owner.toLowerCase() === account.toLowerCase();
-            const card = document.createElement("div");
-            card.className = "feature-card trader-card";
-            card.innerHTML = `
-                <div class="jar" aria-hidden="true"><span class="jar-lid"></span><span class="jar-brain">🧠</span><span class="bubble b1"></span><span class="bubble b2"></span><span class="bubble b3"></span></div>
-                <div class="trader-head"><h3>Brain #${id}</h3><span class="tier-chip">${TIERS[tier]}</span></div>
-                <dl class="trader-stats">
-                    <div><dt>NAV</dt><dd class="stat-inline">${Number(formatUnits(nav, 18)).toLocaleString()} mUSDC</dd></div>
-                    <div><dt>Trades</dt><dd class="stat-inline">${trades}</dd></div>
-                    <div><dt>Status</dt><dd>${seasoned ? "seasoned" : "intern szn"}</dd></div>
-                </dl>
-                <p class="trait-badges"><span>${CUSTODY[g.custody]}</span><span>risk ${g.riskProfile}</span><span>${g.cadence}/day</span>${mine ? "<span>yours</span>" : ""}</p>
-                <p class="hash-chip" title="genome commitment">${g.commitment.slice(0, 10)}…${g.commitment.slice(-6)}</p>
-                <div class="brain-actions"></div>`;
-            const actions = card.querySelector(".brain-actions");
-            const btn = (labelText, fn, cls) => {
-                const b = document.createElement("button");
-                b.textContent = labelText;
-                if (cls) b.className = cls;
-                b.onclick = () => fn().then(loadRoster).catch((e) => log(e.shortMessage || e.message, "err"));
-                actions.appendChild(b);
-            };
-            btn("🔔 Ring the Bell", () => write(vaultAddr, vaultAbi, "ringTheBell", [], `ring the bell on #${id}`), "bell");
-            if (seasoned) {
-                const amt = document.createElement("input");
-                amt.placeholder = "mUSDC";
-                actions.appendChild(amt);
-                btn("Deposit", async () => {
-                    const assets = parseUnits(amt.value || "0", 18);
-                    await ensureAllowance(vaultAddr, assets, `deposit to #${id}`);
-                    await write(vaultAddr, vaultAbi, "deposit", [assets, account], `deposit ${amt.value} mUSDC into #${id}`);
-                });
-                if (myShares > 0n) {
-                    btn("Withdraw all", async () => {
-                        const max = await pub.readContract({ address: vaultAddr, abi: vaultAbi, functionName: "maxWithdraw", args: [account] });
-                        await write(vaultAddr, vaultAbi, "withdraw", [max, account, account], `withdraw ${formatUnits(max, 18)} mUSDC from #${id}`);
-                    });
-                }
-            }
-            if (mine && tier < 2) {
-                btn(`Promote to ${TIERS[tier + 1]}`, async () => {
-                    const [, fee] = await pub.readContract({ address: cfg.guard, abi: guardAbi, functionName: "tiers", args: [BigInt(tier + 1)] });
-                    await ensureAllowance(cfg.guard, fee, "tier upgrade");
-                    await write(cfg.guard, guardAbi, "activate", [id, tier + 1], `promote #${id} to ${TIERS[tier + 1]} (${formatUnits(fee, 18)} mUSDC)`);
-                });
-            }
-            roster.appendChild(card);
-        }
-
-        // ── mint (authored custody, everything local) ────────────
-        function canonicalize(v) {
-            if (v === null || typeof v !== "object") return JSON.stringify(v);
-            if (Array.isArray(v)) return `[${v.map(canonicalize).join(",")}]`;
-            return `{${Object.entries(v).sort(([a],[b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, x]) => `${JSON.stringify(k)}:${canonicalize(x)}`).join(",")}}`;
-        }
-
-        $("mintForm").onsubmit = async (e) => {
-            e.preventDefault();
-            try {
-                if (!wallet || !cfg?.traderNFT) throw new Error("connect a wallet and set contract addresses first");
-                const genome = { prompt: $("m-prompt").value, tweaks: $("m-tweaks").value ? JSON.parse($("m-tweaks").value) : {} };
-                const commitment = keccak256(toBytes(canonicalize(genome)));
-                // encrypt locally (AES-256-GCM via WebCrypto) and hand the jar to the minter
-                const key = crypto.getRandomValues(new Uint8Array(32));
-                const iv = crypto.getRandomValues(new Uint8Array(12));
-                const k = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
-                const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, new TextEncoder().encode(JSON.stringify(genome))));
-                const b64 = (u) => btoa(String.fromCharCode(...u));
-                const envelope = { v: 1, iv: b64(iv), tag: b64(sealed.slice(-16)), ciphertext: b64(sealed.slice(0, -16)) };
-                const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
-                Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "genome.local.json" }).click();
-                const keyHex = [...key].map((b) => b.toString(16).padStart(2, "0")).join("");
-                log(`commitment ${commitment}`);
-                log(`GENOME_KEY ${keyHex}  ← copy this NOW; it is not stored anywhere`, "ok");
-                const universe = [cfg.weth, cfg.wbtc].filter(Boolean);
-                await write(cfg.traderNFT, nftAbi, "mint",
-                    [commitment, Number($("m-risk").value), Number($("m-cadence").value), 0, "claude-sonnet-5", "local:genome.local.json", universe, 200, 2000],
-                    "mint brain");
-                await loadRoster();
-            } catch (err) { log(err.shortMessage || err.message, "err"); }
-        };
-
-        $("connectBtn").onclick = () => connect().catch((e) => log(e.shortMessage || e.message, "err"));
-        $("cfgBtn").onclick = () => { $("cfgPanel").hidden = !$("cfgPanel").hidden; };
-        $("cfgSave").onclick = () => {
-            if (!chainId) { log("connect first", "err"); return; }
-            const saved = { traderNFT: $("cfg-traderNFT").value.trim(), guard: $("cfg-guard").value.trim(), usdc: $("cfg-usdc").value.trim() };
-            localStorage.setItem(`brokners-cfg-${chainId}`, JSON.stringify(saved));
-            cfg = loadCfg(chainId);
-            $("cfgPanel").hidden = true;
-            log("contract addresses saved (this browser only)", "ok");
-            loadRoster().catch((e) => log(e.shortMessage || e.message, "err"));
-        };
-    </script>
+    <script type="module" src="js/terminal/main.js"></script>
 </body>
 </html>

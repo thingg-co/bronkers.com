@@ -11,3 +11,7 @@ agent/genome.local.json
 protocol/out/
 protocol/cache/
 protocol/broadcast/
+
+# Terminal dev seed (protocol/script/seed-dev.sh)
+agent/genome.dev*.json
+agent/.dev-enclave.env

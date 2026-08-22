@@ -49,10 +49,16 @@ contract TraderNFT is ERC721, ITraderNFT {
     uint256 public nextId;
     mapping(uint256 => Genome) private _genomes;
     mapping(uint256 => address) private _vaults;
+    mapping(uint256 => string) private _names;
+
+    /// A name is cosmetic and public; it is set once by the owner and then
+    /// frozen, so a track record cannot be laundered by renaming.
+    uint256 public constant MAX_NAME_BYTES = 32;
 
     event TraderBorn(
         uint256 indexed tokenId, address indexed minter, bytes32 commitment, address account, address vault
     );
+    event Christened(uint256 indexed tokenId, string name);
 
     constructor(
         IERC6551Registry registry_,
@@ -125,6 +131,20 @@ contract TraderNFT is ERC721, ITraderNFT {
 
     function vaultOf(uint256 tokenId) external view returns (address) {
         return _vaults[tokenId];
+    }
+
+    /// @notice Give a brain its name. Owner-only, once, at most 32 bytes.
+    function christen(uint256 tokenId, string calldata name) external {
+        require(msg.sender == ownerOf(tokenId), "Trader: not owner");
+        require(bytes(_names[tokenId]).length == 0, "Trader: already named");
+        require(bytes(name).length > 0 && bytes(name).length <= MAX_NAME_BYTES, "Trader: name length");
+        _names[tokenId] = name;
+        emit Christened(tokenId, name);
+    }
+
+    /// @notice The brain's name, or "" if it has none yet.
+    function nameOf(uint256 tokenId) external view returns (string memory) {
+        return _names[tokenId];
     }
 
     /// @dev On every real transfer: crystallize accrued vault fees under the

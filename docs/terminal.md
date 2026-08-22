@@ -1,0 +1,127 @@
+# The Terminal
+
+*How the Brokners dapp is put together, and why. Companion to
+[architecture.md](architecture.md); plain-language counterpart at `/app`.*
+
+## What it is
+
+The Terminal is a zero-build, no-backend web app. It reads the chain over a
+public RPC and writes through the visitor's wallet. There is no server, no
+indexer and no database: every number on every page is recomputed from
+contract state and `TradeExecuted` logs, which is the point of the protocol.
+
+It is organised around four jobs:
+
+| Tab | Who it is for | What it does |
+|---|---|---|
+| **The Floor** | anyone, no wallet needed | every brain, live, sortable by return / NAV / trades / age / bell reward; filter to open vaults, interns, yours, or bells worth ringing |
+| **Birth a Brain** | creators | a five-step wizard: strategy → custody → traits → review → mint. Sealed custody by default, entirely in the browser |
+| **My Desk** | owners, depositors, keepers | manage the brains you own, see your vault positions, ring bells that pay |
+| **Developer** | us | chain / RPC / addresses, a dev wallet for local anvil, a faucet, a lever to move the mock market, the runtime command |
+
+Clicking a brain opens its page: share-price return since inception, vault NAV,
+own-book value, trade count, max drawdown, a share-price chart, the internship
+progress for interns, the full trade table from logs, vault terms (fees,
+high-water mark, fee shares accrued to the jar, allowlist status, your
+position) and identity (owner, token-bound wallet, vault, executor, custody,
+commitment, model, traits). Deposit, withdraw and Ring the Bell live there.
+
+## How it behaves
+
+**Read-only first.** On load the Terminal picks a chain (the saved one, else the
+injected wallet's chain if it is configured, else the default) and opens a
+`viem` public client on that chain's RPC. The Floor and every brain page work
+with no wallet at all. If the RPC cannot be reached, it falls back to
+`data/traders.json` (written by `agent/src/report.ts`) and says so.
+
+**Connect only to act.** "Connect wallet" attaches an injected wallet
+(MetaMask, Rabby…) and switches it to the selected chain, adding the chain if
+the wallet does not know it. On local test chains the Developer tab also
+accepts a raw dev key (anvil's accounts), kept in `sessionStorage`; the same
+thing can be passed as `?devkey=0x…` for headless testing.
+
+**Every write is narrated.** Actions build a list of steps (approve, then
+deposit; mint, then name) and run them through one modal that shows each
+step's status and transaction hash. Reverts are translated into sentences:
+"This brain is still an intern…", "This vault is allowlist-only and your
+address is not on it…". The raw log is one click away (console).
+
+**Before you sign, you are told what happens.** The deposit modal shows the
+share price, estimated shares and the fee terms; the bell modal shows the
+pending management and performance fees and your 1% cut before you ring (via
+`TraderVault.pendingFees()`); promoting shows the fee; transferring warns that
+the brain's wallet goes with it.
+
+## Files
+
+```
+app.html                  shell: hero, tab bar, #view, console pane
+js/config.js              per-chain RPC, explorer, addresses, enclave public key
+js/terminal/main.js       hash router, header, window.__terminal debug handle
+js/terminal/chain.js      chain + wallet state; public client, injected / dev wallet
+js/terminal/data.js       reads: roster summaries, brain detail, trades from logs,
+                          NAV series (archive reads at trade blocks), snapshot fallback
+js/terminal/actions.js    writes: step runner, revert translation, every on-chain action
+js/terminal/crypto.js     canonicalize + commit (frozen), authored (AES-GCM) and
+                          sealed (X25519 → HKDF → AES-GCM) envelopes, WebCrypto only
+js/terminal/venues.js     venue-aware trade/holding formatting (swap today; prediction
+                          markets when the Polymarket adapter lands)
+js/terminal/ui.js         DOM helper, formatting, sparkline, modal, toast, fields
+js/terminal/views/        floor.js · brain.js · create.js · desk.js · dev.js
+```
+
+Everything is plain ES modules loaded straight from the page; `viem` comes from
+esm.sh. No bundler, no framework.
+
+## Contract surface the Terminal depends on
+
+Added for the Terminal (tests in `protocol/test/Views.t.sol`):
+
+- `TraderVault.pendingFees() → (mgmtShares, perfShares, bellReward)` — exactly
+  what the next checkpoint would mint, so a keeper sees the reward before
+  ringing.
+- `TraderNFT.christen(tokenId, name)` / `nameOf(tokenId)` — owner-only,
+  once, ≤ 32 bytes, permanent. Cosmetic; a record cannot be laundered by
+  renaming.
+
+Everything else was already public: `policyOf`, `tierOf`, `tiers`, `seasoned`,
+`tradeCountOf`, `firstTradeAt`, `seasonMinTrades`, `seasonDuration`, `tbaNav`,
+the 4626 views, `highWaterMark`, `allowlistEnabled`, `depositAllowed`, and the
+`TradeExecuted` event.
+
+Owner actions on the brain's own wallet (fund, authorise the guard, sweep,
+redeem fee shares) go through the ERC-6551 account's `execute()`; the Terminal
+encodes the inner call and the account forwards it.
+
+## Sealing in the browser
+
+Sealed custody from the browser uses WebCrypto only: an ephemeral X25519 key,
+ECDH against the enclave's public key (base64 SPKI from `genome keygen`,
+configured per chain), HKDF-SHA256 with info `brokners-genome-v2`, AES-256-GCM.
+The envelope is byte-compatible with `agent/src/enclave.ts`; the dev harness
+mints a browser-sealed brain and has the Node runtime open it, verify the
+commitment and trade. The plaintext never leaves the tab unencrypted, and the
+browser keeps no key. Sealed-and-generated custody needs the enclave to write
+the prompt and stays CLI-only until there is an enclave endpoint.
+
+## Developing against anvil
+
+```bash
+anvil --silent &
+./protocol/script/seed-dev.sh      # deploys, mints 3 brains in different states,
+                                   # writes addresses + enclave key into js/config.js
+python3 dev-server.py              # http://127.0.0.1:8000/app
+```
+
+The seed prints the dev keys. Paste one in the Developer tab (or open
+`/app?devkey=…`) to act as the owner or the LP. `protocol/script/demo.sh` is
+still the one-shot end-to-end demo; `seed-dev.sh` leaves the chain up.
+
+## Still to do
+
+- Polymarket adapter: `venues.js` already formats prediction-market trades
+  ("Bought 1,400 YES at 36¢ · question") from a `venues` / `markets` map in
+  `config.js`; the adapter and the TBA-as-order-signer work are the real task.
+- `tokenURI` with the jar SVG so marketplaces render brains; a "list it" link.
+- Attested execution label ("attested" vs "operated") once the registry exists.
+- Public testnet (Polygon Amoy) addresses in `config.js`.

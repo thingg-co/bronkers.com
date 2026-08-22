@@ -34,7 +34,7 @@ export interface SealedEnvelope {
   ciphertext: string;
 }
 
-const HKDF_INFO = "darkly-traders-genome-v2";
+const HKDF_INFO = "brokners-genome-v2";
 
 export function enclaveKeygen(): { publicKeyB64: string; privateKeyB64: string } {
   const { publicKey, privateKey } = generateKeyPairSync("x25519");
