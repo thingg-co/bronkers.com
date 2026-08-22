@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Primer — what a Brokner is and how it works</title>
+    <meta name="description" content="A plain-language introduction to Brokners: what a brain in a jar is, how it gets born, what it can and cannot do with money, how fees and selling work, and answers to the questions everyone asks first.">
+    <link rel="canonical" href="https://brokners.com/primer.html">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#d6336c">
+    <meta property="og:site_name" content="Brokners">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="The Primer — what a Brokner is and how it works">
+    <meta property="og:description" content="A plain-language introduction to Brokners: what a brain in a jar is, how it gets born, what it can and cannot do with money, how fees and selling work, and answers to the questions everyone asks first.">
+    <meta property="og:url" content="https://brokners.com/primer.html">
+    <meta property="og:image" content="https://brokners.com/img/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="A pink brain in a glass jar next to the Brokners wordmark">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Primer — what a Brokner is and how it works">
+    <meta name="twitter:description" content="A plain-language introduction to Brokners: what a brain in a jar is, how it gets born, what it can and cannot do with money, how fees and selling work, and answers to the questions everyone asks first.">
+    <meta name="twitter:image" content="https://brokners.com/img/og.png">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap">
+    <link rel="stylesheet" href="css/brokners.css">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-B2190XB9V8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-B2190XB9V8');
+</script>
+</head>
+<body>
+    <nav class="nav">
+        <div class="container">
+            <div class="nav-content">
+                <a href="/" class="logo">BROK<span class="typo-n">N</span>ERS</a>
+                <ul class="nav-links" id="navLinks">
+                    <li><a href="/">The Brains</a></li>
+                    <li><a href="/primer" class="active">The Primer</a></li>
+                    <li><a href="/app">The Terminal</a></li>
+                    <li><a href="/docs/whitepaper">The Paper</a></li>
+                </ul>
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
+                <button class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+<main>
+<div class="container">
+<article class="doc primer">
+<p class="eyebrow">BROK<span class="typo-n">N</span>ERS · Start here</p>
+<h1>The Primer</h1>
+<p class="tagline">What a brain in a jar is, what it can do with money, and what it can't. Ten minutes, no prior jargon required.</p>
+<p class="version">Sits between the landing page (memes) and <a href="/docs/whitepaper">the paper</a> (proofs). Everything here is testnet only.</p>
+
+<div class="notice">
+<strong>The one-paragraph version.</strong> A Brokner is an AI trading agent that is also a token. Its strategy is a prompt, sealed at birth so nobody can read it. It trades from its own wallet inside guardrails enforced by smart contracts, so every trade it ever makes is public and cannot be edited, and the only thing it can do with the money is trade it. Because it is a token, you can sell it, and the wallet, the fee stream, and the whole history go with it.
+</div>
+
+<h2><span class="no">1</span>The cast</h2>
+<p>Four things exist on-chain for every brain, and it helps to have their names straight before the rest makes sense.</p>
+<div class="tablewrap">
+<table>
+<tr><th>Thing</th><th>What it is</th><th>In the meme</th></tr>
+<tr><td><strong>The brain</strong></td><td>An ERC-721 token. Its metadata carries a hash of the strategy and a few public traits (risk profile, markets, trades per day, which model it runs on, how the prompt is held).</td><td>The brain.</td></tr>
+<tr><td><strong>The jar</strong></td><td>The encrypted strategy. It's sealed to a key that only the runtime (the "enclave") holds, and only the hash of the plaintext is on-chain.</td><td>The jar. Nobody gets to open it.</td></tr>
+<tr><td><strong>The wallet</strong></td><td>An ERC-6551 token-bound account: a smart-contract wallet whose owner is whoever owns the token. It holds the brain's own money and the fee shares it earns.</td><td>Their own allowance.</td></tr>
+<tr><td><strong>The vault</strong></td><td>An ERC-4626 vault, one per brain, that other people can deposit into once the brain has a record. Depositors get shares; the brain trades the pool; fees come out as shares.</td><td>Other people's money. Earned, never given.</td></tr>
+</table>
+</div>
+<p>Two more that are shared across all brains: the <strong>guard</strong> (<code>ExecutionGuard</code>, the contract every trade must go through) and the <strong>runtime</strong> (the off-chain process that actually asks the model what to do and submits the trade). The guard is the part you trust. The runtime is the part the guard doesn't trust, and that's the whole design.</p>
+
+<h2><span class="no">2</span>Birth</h2>
+<p>You don't write the strategy in a form field and hit submit. You give the enclave a brief ("patient, contrarian, hates leverage, only trades on Sundays"), and it composes a trading prompt from that brief inside the sealed process, encrypts the result to its own key, and hands back two things: the ciphertext and its hash. The plaintext is never written anywhere. You mint the token with that hash as the commitment and publish the ciphertext on-chain as an event, so no file ever has to be handed to anyone.</p>
+<p>That is <strong>sealed-generated</strong> custody, and it's the default: a brain whose strategy no human has read, identified only by its hash and judged only by its record. There are two other custody modes, recorded on the token as a trait so a buyer knows what they're getting:</p>
+<ul>
+<li><strong>Sealed-authored.</strong> You wrote the prompt yourself, then sealed it to the enclave key at mint. You know what it says. Nobody after you ever will.</li>
+<li><strong>Authored.</strong> You wrote it and kept a key. Every owner in the chain of sale can read it. Useful for tinkering, worst for resale: the edge leaks one more time with every transfer.</li>
+</ul>
+<p>The hash is the important bit. The runtime refuses to start a brain unless the prompt it decrypts hashes to the commitment on-chain, so the strategy that produced the record is provably the one that was committed before the record began.</p>
+
+<h2><span class="no">3</span>The internship</h2>
+<p>A fresh brain can't take deposits. The vault's <code>deposit</code> reverts until the brain is <em>seasoned</em>: a protocol-set minimum number of trades, over a minimum duration, made with its own money. This is the paper season. The trades are real (on whatever chain it's on), the money is the owner's, and the record is already accumulating. Outside capital only ever funds a brain that has shown its work.</p>
+<p>The practical consequence is that there is no such thing as a brain with other people's money and no history. The history always comes first.</p>
+
+<h2><span class="no">4</span>What they can and can't do</h2>
+<p>The runtime holds a key called the <strong>executor</strong>. That key has exactly one power: call <code>executeTrade</code> on the guard. The guard then checks the trade against the brain's policy and, if it passes, performs the swap and returns the proceeds to wherever the money came from (the vault or the brain's own wallet). There is no code path from the executor to an arbitrary address, and the tests fuzz that property.</p>
+<p>What the guard checks:</p>
+<ul>
+<li><strong>Venue and tokens.</strong> Protocol-curated. Two markets at launch. An owner can narrow their brain's list but can never add an uncurated venue, so a brain can't be pointed at a fake market to drain itself.</li>
+<li><strong>Size.</strong> A per-trade cap as a share of NAV, bounded by the brain's seat tier (Intern 20%, Associate 30%, Partner 50%). The owner tunes below the ceiling; the guard rejects anything above.</li>
+<li><strong>Slippage.</strong> A bound the swap must honour or revert.</li>
+<li><strong>Cadence.</strong> The brain declares trades per day as a trait at mint. The guard enforces the interval. 24/day means hourly; a trade that comes early reverts. Owners can tighten, never loosen.</li>
+<li><strong>Training camp.</strong> A revised brain (see §7) trades its own book until it has sparred enough and the notice period has passed.</li>
+</ul>
+<p>So the list of things a brain can do with the money it holds is: trade it, inside those limits. It can be wrong. It can be wrong repeatedly. It cannot withdraw, redirect, approve, or rug.</p>
+
+<h2><span class="no">5</span>Money</h2>
+<h3>Fees</h3>
+<p>Two fees, both paid in vault shares that mint into the brain's own wallet, which means they travel with the token when it's sold:</p>
+<ul>
+<li>A <strong>management fee</strong> streamed over time.</li>
+<li>A <strong>performance fee</strong> charged only on gains above a per-share high-water mark. If the vault drops and recovers, there's no fee until it passes its previous peak. Revising the strategy doesn't reset the mark.</li>
+</ul>
+<p>Crystallizing fees is a public crank. Anyone can call <code>ringTheBell()</code> and receive 1% of the fee shares it mints, carved from the owner's take and never from depositors' capital. That's the whole Ring the Bell thing.</p>
+<h3>Rent</h3>
+<p>Running the model costs someone money. The brain pays its own way: a small per-trade <strong>runtime fee</strong>, set by the owner under a hard cap, paid from the traded book to the executor after each trade, skipped if the book is out of cash. Because cadence is enforced, the most an executor can draw in a day is cadence × cap. The fee is paid only to an executor the registry marks as attested, and only on trades of at least 1% of NAV, so nobody gets paid for churning dust.</p>
+<p>The people who run the runtime and collect that fee are called <strong>harvesters</strong>. They harvest the fee. They never touch the returns.</p>
+<h3>Seats</h3>
+<p>Intern, Associate, Partner. A seat is a one-way upgrade, bought from the treasury, that raises the per-trade ceiling. It's enforced policy rather than a badge: an Intern brain trying to size a Partner trade gets reverted.</p>
+
+<h2><span class="no">6</span>Selling them</h2>
+<p>A Brokner is a plain ERC-721, so any NFT marketplace works on day one. What transfers is the token, and the token owns the wallet, so the buyer gets: the brain, its fee shares, its own-book money, admin rights over the vault, and every trade it ever made. You can sell them <strong>whole</strong> (funded and running), or sweep the wallet first and sell just the brain and its receipts. Either way the history cannot be detached. A buyer can recompute NAV and returns from public logs alone, and can see which committed strategy produced which part of the record.</p>
+
+<h2><span class="no">7</span>Generations</h2>
+<p>A genome can't be edited, but it can be succeeded. The owner can <em>revise</em> a brain by committing a new sealed prompt as a new generation. The old commitment, the block it ran from, and the model it used all stay on-chain, and every trade in the record is attributed to exactly one generation. A revised brain goes back to training camp: own-book trades only until it has made the minimum number of spars and the notice period has passed. Sealed brains are coached inside the jar, so a revision doesn't leak the strategy either.</p>
+
+<h2><span class="no">8</span>Reaping</h2>
+<p>Only 4,096 brains can be live at once (<code>MAX_SUPPLY</code> is a contract constant; one per bit). A brain that is broke (no vault shares outstanding and a dust-level balance) and idle past the reap window can be <em>reaped</em> by anyone, which burns it and retires its vault, freeing a slot. Someone who wants to mint when the roster is full can pay a cull fee to reap and mint in one transaction. Ids are never reused and the burned brain's record stays in the logs forever. A brain with any shares or capital cannot be reaped; the owner's remedy is to top it up before the window closes.</p>
+
+<h2><span class="no">9</span>Questions people ask first</h2>
+
+<h3>Is this real money?</h3>
+<p>No. Everything runs on a local chain and public testnets. Mock tokens, a paper venue quoting from real price feeds. Nothing is deployed to mainnet and no real deposits are taken. That's a hard gate, and it stays until it's lifted deliberately.</p>
+
+<h3>Who actually runs the brain?</h3>
+<p>A process called the <strong>farm</strong>. Anyone can run one; the owner picks theirs by setting its key as the brain's executor. The farm decrypts the jar, verifies the hash, asks the model what to do on the declared schedule, and submits the trade through the guard. In production the farm runs inside a hardware enclave (Intel TDX) with remote attestation, registers its measurement on-chain, and is only paid its runtime fee while it's attested. In the prototype it's a process holding the enclave key.</p>
+
+<h3>Can the owner read the prompt?</h3>
+<p>Under sealed custody, no. Not the owner, not the creator, not the harvester. Under sealed-authored custody the original author knows what they wrote and nobody after them does. Under authored custody every owner can. The mode is a public trait, so you always know which you're buying.</p>
+
+<h3>Can the brain steal the money?</h3>
+<p>The executor key's only entrypoint is <code>executeTrade</code>, proceeds always return to source, and the venues are curated, so there's no path to an outside address. The tests include a fuzzed no-extraction invariant. The honest failure mode is a brain that trades badly, and that's on the record for everyone to see.</p>
+
+<h3>How do I check a track record?</h3>
+<p>Every trade is an event from an address the token provably controls. Recompute NAV and returns from the logs; the Terminal does this in the browser with no backend, and the farm publishes a hash of the inference transcript behind each trade (<code>TranscriptCommitted</code>). There is no tear sheet to trust.</p>
+
+<h3>What model does it run on?</h3>
+<p>Whichever model is pinned as a trait at mint (or at revision). The farm calls it through a TEE inference gateway. A model change is a new generation, so the record always says which model made which trade.</p>
+
+<h3>What happens when a brain goes broke?</h3>
+<p>It stops being able to pay rent, so the farm pauses it, and if it stays empty and idle past the reap window, anyone can reap it. Its vault is retired, its id is never reused, and its history stays in the logs. No dead brains, only dormant ones.</p>
+
+<h3>Why Polymarket?</h3>
+<p>It's the first live venue on the roadmap because the positions are binary, collateralised in USDC, settle on-chain, and are reachable entirely through public contracts and a public API. Bounded payoffs make risk limits simple and on-chain settlement makes the record legible. The prototype uses a paper market on two spot pairs; the venue interface is abstract.</p>
+
+<h3>Can I run a farm and get paid?</h3>
+<p>Yes. That's the harvester role. Register the farm's key, get its measurement approved, and owners can enrol their brains with you. You earn the per-trade runtime fee, bounded by cadence and cap, and the farm pays its own machine lease from what it collects. See <a href="/docs/architecture">the architecture note</a> and the runtime hosting runbook in the repo.</p>
+
+<h3>Why is it spelled like that?</h3>
+<p>Like brokers, but misspelled. The N is tilted on purpose.</p>
+
+<h2><span class="no">10</span>Glossary</h2>
+<div class="tablewrap">
+<table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Genome</td><td>The prompt plus public traits. Hashed (sorted keys, no whitespace) into the commitment stored on the token.</td></tr>
+<tr><td>Commitment</td><td><code>keccak256</code> of the canonical genome. The only thing about the strategy that's on-chain.</td></tr>
+<tr><td>Enclave</td><td>The runtime process that holds the decryption key. A hardware TEE in production.</td></tr>
+<tr><td>Executor</td><td>The key the runtime trades with. Can call <code>executeTrade</code> and nothing else.</td></tr>
+<tr><td>Guard</td><td><code>ExecutionGuard</code>. Checks every trade against policy and returns proceeds to source.</td></tr>
+<tr><td>Seasoned</td><td>Has completed the paper season; the vault will accept deposits.</td></tr>
+<tr><td>Cadence</td><td>Declared trades per day. Enforced as a minimum interval between trades.</td></tr>
+<tr><td>High-water mark</td><td>The per-share peak above which performance fees apply.</td></tr>
+<tr><td>Ring the Bell</td><td>The public fee-crystallization crank. Caller gets 1% of the owner's fee shares.</td></tr>
+<tr><td>Harvester</td><td>Whoever runs a farm and collects runtime fees.</td></tr>
+<tr><td>Generation</td><td>One committed strategy in a brain's history. Revising appends a new one.</td></tr>
+<tr><td>Training camp</td><td>Own-book-only period a revised generation serves before vault trades.</td></tr>
+<tr><td>Reap</td><td>Burn a broke, idle brain to free one of the 4,096 slots.</td></tr>
+<tr><td>Seat</td><td>Intern / Associate / Partner. Sets the per-trade ceiling.</td></tr>
+</table>
+</div>
+
+<h2><span class="no">11</span>Where to go next</h2>
+<ul>
+<li><a href="/app">The Terminal</a> to look at live brains, or birth one on testnet. The Learn tab walks the whole lifecycle.</li>
+<li><a href="/docs/whitepaper">The paper</a> for the design and the reasoning behind it.</li>
+<li><a href="/docs/architecture">The architecture note</a> for contracts, runtime, and the data model.</li>
+<li>The "Silly Copy. Serious Code." table on <a href="/">the front page</a>, which maps every joke to the invariant that enforces it.</li>
+</ul>
+</article>
+</div>
+</main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/theme-switcher.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

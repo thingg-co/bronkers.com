@@ -15,6 +15,7 @@ tab walks through the lifecycle).
 
 ```
 index.html      the Brokners concept page
+primer.html     The Primer — plain-language intro, FAQ, and glossary (start here)
 app.html        The Terminal — zero-build dapp (viem via CDN, NO backend:
                 the browser talks straight to the contracts via your wallet)
 css/brokners.css  the single stylesheet every page loads (no inline styles)
