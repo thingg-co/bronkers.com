@@ -24,7 +24,7 @@ window.BROKNERS_CONFIG = {
       // base64 SPKI of the dev enclave's X25519 key; seed-dev.sh prints a
       // fresh one each run — paste it in the Developer panel to mint sealed
       // brains from the browser against your local chain.
-      enclavePublicKey: "MCowBQYDK2VuAyEAGWOriBPnhAgTFYARud38SLx+hUeVZK0K+acwUiVBCi0",
+      enclavePublicKey: "MCowBQYDK2VuAyEAJ0ZvJRE+evr6hVrCbxGEl3LrgodL6Y2z8hR2XljLcgU",
       // The enclave's executor address. "Enrolling" a brain means setting its
       // executor to this key; the farm (agent: npm run farm) then runs it.
       enclaveExecutor: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
@@ -33,7 +33,7 @@ window.BROKNERS_CONFIG = {
       registry: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
       // The machine market the farm pays its lease into (the mock Oyster market here;
       // Marlin's on Arbitrum One in production). Informational: the farm reads it.
-      hostMarket: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
+      hostMarket: "0x59b670e9fA9D0A427751Af201D676719a970857b",
       // The enclave endpoint (the farm's FARM_HTTP_PORT): /compose writes and seals a
       // prompt from a brief for sealed-generated brains; /health reports identity and
       // the farm's books; /ledger?tokenId= the account it keeps for one brain.
