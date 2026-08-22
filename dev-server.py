@@ -9,6 +9,12 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 
 class CleanURLHandler(SimpleHTTPRequestHandler):
+    # never let the browser cache during development: the Terminal is ES
+    # modules, and a stale floor.js next to a fresh stylesheet is confusing
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def translate_path(self, path):
         fs_path = super().translate_path(path)
         bare = path.split("?")[0].split("#")[0].rstrip("/")
