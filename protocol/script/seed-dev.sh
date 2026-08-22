@@ -32,6 +32,9 @@ USDC=$(addr "mUSDC:"); WETH=$(addr "mWETH:"); WBTC=$(addr "mWBTC:"); ROUTER=$(ad
 GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:"); MARKET=$(addr "Market:")
 [ -n "$NFT" ] || { echo "deploy failed:"; echo "$DEPLOY_OUT" | tail -20; exit 1; }
 
+# a fresh chain means fresh books: the farm's ledger and transcripts belong to the chain that was just replaced
+rm -f agent/.farm-ledger.json agent/.farm-ledger.json.tmp; rm -rf agent/.farm-transcripts agent/.transcripts
+
 echo "── enclave keygen ──"
 KEYS=$(cd agent && npm run --silent genome -- keygen)
 ENCLAVE_PUB=$(echo "$KEYS" | grep ENCLAVE_PUBLIC_KEY | cut -d= -f2 | awk '{print $1}')
