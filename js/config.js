@@ -24,7 +24,7 @@ window.BROKNERS_CONFIG = {
       // base64 SPKI of the dev enclave's X25519 key; seed-dev.sh prints a
       // fresh one each run — paste it in the Developer panel to mint sealed
       // brains from the browser against your local chain.
-      enclavePublicKey: "MCowBQYDK2VuAyEA9SdFj5u822G6GI6WkNdc62Iw8rH5fo7XUBP2C9UjZWg",
+      enclavePublicKey: "MCowBQYDK2VuAyEAGWOriBPnhAgTFYARud38SLx+hUeVZK0K+acwUiVBCi0",
       // The enclave's executor address. "Enrolling" a brain means setting its
       // executor to this key; the farm (agent: npm run farm) then runs it.
       enclaveExecutor: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
