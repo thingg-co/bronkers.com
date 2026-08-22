@@ -7,6 +7,7 @@ export const nftAbi = parseAbi([
   "function MAX_SUPPLY() view returns (uint256)",
   "function liveSupply() view returns (uint256)",
   "function burnedCount() view returns (uint256)",
+  "function exists(uint256) view returns (bool)",
   "function cullAndMint(uint256,bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
   "function genomeOf(uint256) view returns (Genome)",
   "function ownerOf(uint256) view returns (address)",

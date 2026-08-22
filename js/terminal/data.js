@@ -150,7 +150,9 @@ export async function loadRoster({ force } = {}) {
   ]);
   const ids = [];
   for (let i = 1n; i <= nextId; i++) ids.push(i);
-  const brains = await Promise.all(ids.map((i) => limit(() => summary(i))));
+  // reaped brains are burned: skip them (summary() would revert on genomeOf)
+  const alive = await Promise.all(ids.map((i) => limit(() => read(traderNFT, nftAbi, "exists", [i]).catch(() => true))));
+  const brains = (await Promise.all(ids.filter((_, k) => alive[k]).map((i) => limit(() => summary(i).catch(() => null))))).filter(Boolean);
   cache.roster = { count: Number(nextId), max: Number(maxSupply), live: liveSupply == null ? null : Number(liveSupply), burned: Number(burnedCount), brains };
   return cache.roster;
 }
@@ -232,6 +234,8 @@ export function maxDrawdown(values) {
 export async function loadBrain(id, { force } = {}) {
   id = Number(id);
   if (cache.brains.has(id) && !force) return cache.brains.get(id);
+  const alive = await read(state.cfg.traderNFT, nftAbi, "exists", [BigInt(id)]).catch(() => true);
+  if (!alive) throw new Error(`Brain #${id} was reaped — its token no longer exists (its record is still in the logs).`);
   const b = await summary(id);
   const { guard, usdc } = state.cfg;
   const me = state.account;
