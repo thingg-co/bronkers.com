@@ -131,7 +131,7 @@ async function manage(brain, refresh) {
     } }, "Transfer")));
 
   return el("section", { class: "desk-brain", id: `brain-${brain.id}` },
-    el("header", { class: "brain-head compact" }, jar(), el("div", { class: "brain-title" },
+    el("header", { class: "brain-head compact" }, jar(brain), el("div", { class: "brain-title" },
       el("h3", {}, el("a", { href: `#/brain/${brain.id}` }, brain.label), " ", el("span", { class: "tier-chip" }, TIERS[brain.tier])),
       el("p", { class: "card-badges" }, statusBadge(brain), custodyBadge(brain)))),
     el("div", { class: "two-col" }, walletPanel, runtimePanel),

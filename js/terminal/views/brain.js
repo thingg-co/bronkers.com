@@ -208,7 +208,7 @@ export async function render(root, { id }) {
   append(root, [
     el("p", {}, el("a", { href: "#/", class: "back" }, "← The Floor")),
     el("header", { class: "brain-head" },
-      jar(),
+      jar(brain),
       el("div", { class: "brain-title" },
         el("h2", {}, brain.label, " ", el("span", { class: "tier-chip" }, TIERS[brain.tier])),
         el("p", { class: "card-badges" }, statusBadge(brain), custodyBadge(brain), brain.mine ? badge("yours", "accent") : null, brain.snapshot ? badge("snapshot", "muted") : null),

@@ -14,8 +14,23 @@ const SORTS = {
 
 const prefs = { sort: localStorage.getItem("brokners-floor-sort") || "return", filter: localStorage.getItem("brokners-floor-filter") || "all" };
 
-export function jar() {
-  return el("div", { class: "jar", "aria-hidden": "true" },
+/** Every jar's fluid is tinted from the genome commitment: hue, saturation and
+ *  lightness each come from different bytes, so brains differ on three axes. */
+export function fluidTint(commitment) {
+  const hex = String(commitment || "").replace(/^0x/, "");
+  if (hex.length < 12) return { h: 205, s: 65, l: 78 };
+  return {
+    h: parseInt(hex.slice(0, 8), 16) % 360,
+    s: 50 + (parseInt(hex.slice(8, 10), 16) % 31),   // 50–80%
+    l: 68 + (parseInt(hex.slice(10, 12), 16) % 17),  // 68–84%
+  };
+}
+
+export function jar(b) {
+  const { h, s, l } = fluidTint(b && b.genome && b.genome.commitment);
+  return el("div", { class: "jar", "aria-hidden": "true", style: { "--fluid-h": String(h), "--fluid-s": `${s}%`, "--fluid-l": `${l}%` } },
+    el("span", { class: "jar-fluid" }),
+    el("span", { class: "jar-wave w1" }), el("span", { class: "jar-wave w2" }),
     el("span", { class: "jar-lid" }), el("span", { class: "jar-brain" }, "🧠"),
     el("span", { class: "bubble b1" }), el("span", { class: "bubble b2" }), el("span", { class: "bubble b3" }));
 }
@@ -38,7 +53,7 @@ function returnBadge(b) {
 
 export function card(b) {
   const c = el("a", { class: "feature-card trader-card brain-card", href: `#/brain/${b.id}` },
-    jar(),
+    jar(b),
     el("div", { class: "trader-head" }, el("h3", {}, b.label), el("span", { class: "tier-chip" }, TIERS[b.tier])),
     el("p", { class: "card-badges" }, returnBadge(b), statusBadge(b), custodyBadge(b), b.mine ? badge("yours", "accent") : null),
     el("div", { class: "card-spark" }),

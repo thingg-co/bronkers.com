@@ -13,7 +13,7 @@ export function el(tag, attrs = {}, ...children) {
     else if (k === "text") node.textContent = v;
     else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
     else if (k === "dataset") Object.assign(node.dataset, v);
-    else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+    else if (k === "style" && typeof v === "object") for (const [sk, sv] of Object.entries(v)) (sk.startsWith("--") ? node.style.setProperty(sk, sv) : (node.style[sk] = sv));
     else node.setAttribute(k, v === true ? "" : v);
   }
   append(node, children);

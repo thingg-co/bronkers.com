@@ -593,22 +593,11 @@ pre code {
 .brain-hero .wordmark { margin-bottom: calc(var(--space-2xl) - 0.28em); }
 .brain-hero .page-subtitle { margin-top: 0; margin-bottom: 0; }
 
-/* the hero brain is in a jar too: the specimen component, sized in em so it
-   scales with the wordmark, bobbing as a whole */
-.wordmark .hero-brain {
+.hero-brain {
     display: inline-block;
-    width: 0.62em;
-    height: 0.76em;
-    margin: 0 0 0 0.16em;        /* beats .jar's auto/bottom margin */
-    vertical-align: -0.04em;    /* sits on the baseline, tops out at cap height */
-    border-width: 0.03em;
-    border-radius: 0.12em 0.12em 0.26em 0.26em;
+    margin-left: var(--space-sm);
     animation: brain-bob 3s ease-in-out infinite;
 }
-.wordmark .hero-brain .jar-lid { height: 0.1em; border-bottom-width: 0.03em; }
-.wordmark .hero-brain .jar-brain { font-size: 0.36em; }
-.wordmark .hero-brain .bubble { width: 0.05em; height: 0.05em; bottom: -0.08em; }
-.wordmark .hero-brain .bubble.b2 { width: 0.035em; height: 0.035em; }
 
 /* callouts and notes */
 .research-banner {
@@ -786,8 +775,15 @@ pre code {
 }
 
 
-/* specimen jars */
+/* specimen jars: glass, a tinted fluid (hue from the genome commitment via
+   --fluid-h, so every brain's jar is its own colour), two drifting wave crests
+   at the surface, a lid, the brain, bubbles */
 .jar {
+    --fluid-h: 205;
+    --fluid-s: 65%;
+    --fluid-l: 78%;
+    --fluid-top: 30%;
+    --fluid: hsl(var(--fluid-h) var(--fluid-s) var(--fluid-l) / 0.6);
     position: relative;
     width: 5rem;
     height: 6rem;
@@ -796,6 +792,43 @@ pre code {
     border-radius: 0.8rem 0.8rem 1.6rem 1.6rem;
     background: linear-gradient(180deg, var(--bg-tertiary), var(--bg-card));
     overflow: hidden;
+}
+
+[data-theme="dark"] .jar { --fluid: hsl(var(--fluid-h) var(--fluid-s) calc(var(--fluid-l) - 32%) / 0.6); }
+
+.jar-fluid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: var(--fluid-top);
+    background: var(--fluid);
+}
+
+/* the surface: a wave-shaped mask over the fluid colour, two layers drifting
+   at different speeds so the brine looks alive */
+.jar-wave {
+    position: absolute;
+    left: -50%;
+    width: 200%;
+    height: 0.6rem;
+    top: calc(var(--fluid-top) - 0.45rem);
+    background: var(--fluid);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q6 2 12 8 T24 8 V12 H0 Z'/%3E%3C/svg%3E") repeat-x;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q6 2 12 8 T24 8 V12 H0 Z'/%3E%3C/svg%3E") repeat-x;
+    -webkit-mask-size: 1.4rem 100%;
+    mask-size: 1.4rem 100%;
+    animation: wave-drift 5s linear infinite;
+}
+
+.jar-wave.w2 {
+    height: 0.5rem;
+    top: calc(var(--fluid-top) - 0.3rem);
+    opacity: 0.7;
+    -webkit-mask-size: 1.9rem 100%;
+    mask-size: 1.9rem 100%;
+    animation-duration: 7s;
+    animation-direction: reverse;
 }
 
 .jar-lid {
@@ -1238,6 +1271,11 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
     50%      { transform: translateY(-0.35rem) rotate(4deg); }
 }
 
+@keyframes wave-drift {
+    from { transform: translateX(0); }
+    to   { transform: translateX(25%); }
+}
+
 @keyframes brain-float {
     0%, 100% { transform: translateY(0.1rem); }
     50%      { transform: translateY(-0.2rem); }
@@ -1254,6 +1292,7 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
     .ticker-track,
     .hero-brain,
     .jar-brain,
+    .jar-wave,
     .bubble {
         animation: none;
     }
