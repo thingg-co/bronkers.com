@@ -74,11 +74,11 @@ contract Credentials {
     function credentialOf(uint256 tokenId, bytes32 kind)
         external
         view
-        returns (address publisher, uint32 version, uint64 publishedAt, bool revoked, bool active)
+        returns (address publisher, uint32 version, uint64 publishedAt, bool revoked, bool usable)
     {
         Credential storage c = _creds[tokenId][kind];
-        active = c.version > 0 && !c.revoked && c.publisher == nft.ownerOf(tokenId);
-        return (c.publisher, c.version, c.publishedAt, c.revoked, active);
+        usable = c.version > 0 && !c.revoked && c.publisher == nft.ownerOf(tokenId);
+        return (c.publisher, c.version, c.publishedAt, c.revoked, usable);
     }
 
     /// @notice True while the runtime may use the credential of this kind.

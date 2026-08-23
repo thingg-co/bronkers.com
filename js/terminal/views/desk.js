@@ -18,8 +18,8 @@ const TIPS = {
   transfer: "Sends the token. Everything in the brain's wallet goes with it; sweep first to keep the capital.",
   jar: "The sealed envelope (.sealed.json) this brain was minted with. Publishing puts the ciphertext on-chain so an enclave can run the brain.",
   fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol, paid at most once per declared-cadence interval (trades are rate-limited on-chain), skipped when the book has no cash, paid only to an attested executor and only on trades above the dust floor. Raises take effect after the notice period; lowering is immediate.",
-  train: "Revise the brain: a new generation with a new commitment (and, if you like, a new model). It trades the brain's own wallet first; the vault waits until it has sparred the camp's minimum and the notice period has passed. The old generation's trades stay attributed to it; the high-water mark carries over.",
-  brief: "A coach's note. The enclave appends it to the current sealed prompt, seals the next generation, and returns only the commitment and the ciphertext; nobody reads the result, including you.",
+  train: "Revise the brain: a new generation with a new commitment (and, if you like, a new model). Sealed brains are additive-only: the enclave appends your note to the current prompt and countersigns the revision; a wholesale strategy swap has nothing to sign it, so the chain refuses it. It trades the brain's own wallet first; the vault waits until it has sparred the camp's minimum and the notice period has passed. The old generation's trades stay attributed to it; the high-water mark carries over.",
+  brief: "A coach's note. The enclave appends it to the current sealed prompt, seals the next generation, and countersigns the revision (the chain accepts nothing unsigned for a sealed brain); it returns only the commitment, the ciphertext, and the signature. Nobody reads the result, including you.",
   credential: "Your own inference key, sealed in this tab to the enclave key and published on-chain as ciphertext. The enclave opens it only to run this brain, and only while you own the brain: a sale retires it automatically, and you can revoke it here. Tokens billed to your key cost the enclave nothing, so the brain's account with it stops accruing model cost. The key never leaves this tab unencrypted.",
   credentialHost: "Where the enclave may send your key. Anthropic keys go to api.anthropic.com. A gateway key goes to the enclave's own gateway unless you name another host the enclave allows; an arbitrary endpoint is refused, because the sealed prompt would travel with the request.",
   account: "The enclave keeps an account per brain: the runtime fees it has received against what the brain's ticks cost it (model tokens, gas). Fees only arrive on trades, so a brain that holds more than it trades runs on credit; past the operator's grace it is paused until the owner raises the fee.",
@@ -163,18 +163,20 @@ async function manage(brain, refresh) {
   const campLine = brain.inCamp
     ? `Generation ${brain.generation} is in camp: ${brain.camp.trades}/${brain.camp.minTrades} own-book trades${brain.camp.vaultFrom > now ? `, vault from ${fmt.duration(brain.camp.vaultFrom - now)} from now` : ""}. Keep the wallet funded so it can spar.`
     : `Generation ${brain.generation}${brain.generation ? " is out of camp and may trade the vault." : ": the genome it was born with."}`;
-  const doRevise = async (commitment, envelope, cid) => {
-    const steps = [...(envelope && custody !== 0 ? act.publishEnvelope(brain.id, envelope) : []), ...act.revise(brain.id, commitment, modelField.value() || brain.genome.model, cid)];
+  const doRevise = async (commitment, envelope, cid, attestation) => {
+    const steps = [...(envelope && custody !== 0 ? act.publishEnvelope(brain.id, envelope) : []), ...act.revise(brain.id, commitment, modelField.value() || brain.genome.model, cid, attestation)];
     await run("Revise the brain", steps, refresh, el("p", {}, `Generation ${brain.generation + 1}: committed before it trades; it spars on the own book first.`));
   };
   const trainPanel = mk("Training",
     el("p", { class: "muted" }, campLine),
-    custody === 2
-      ? el("div", {}, briefField.el, modelField.el, el("div", { class: "btn-row" }, el("button", { class: "btn primary", disabled: !state.cfg.enclaveUrl, title: state.cfg.enclaveUrl ? "" : "Needs the enclave endpoint (Developer tab)", onclick: async () => {
+    custody !== 0
+      ? el("div", {},
+          el("p", { class: "muted small" }, "A sealed brain is coached, never rewritten: the enclave appends your note to the current prompt, seals the result, and countersigns it. The chain refuses any sealed revision without that signature."),
+          briefField.el, modelField.el, el("div", { class: "btn-row" }, el("button", { class: "btn primary", disabled: !state.cfg.enclaveUrl, title: state.cfg.enclaveUrl ? "" : "Needs the enclave endpoint (Developer tab)", onclick: async () => {
           try {
             const brief = briefField.value(); if (!brief) return toast("Write a coach's note first.", "err");
             const r = await act.trainWithEnclave(brain.id, brief);
-            await doRevise(r.commitment, r.envelope, "onchain:EnvelopePublished");
+            await doRevise(r.commitment, r.envelope, "onchain:EnvelopePublished", r.attestation);
           } catch (e) { toast(act.explain(e), "err"); }
         } }, "Train with the enclave")))
       : el("div", {}, promptField.el, el("details", { class: "adv" }, el("summary", {}, "Tweaks"), tweaksField.el), modelField.el, el("div", { class: "btn-row" }, el("button", { class: "btn primary", onclick: async () => {
@@ -182,18 +184,12 @@ async function manage(brain, refresh) {
             const prompt = promptField.value(); if (!prompt) return toast("Write the new prompt first.", "err");
             let tweaks = {}; if (tweaksField.value()) { try { tweaks = JSON.parse(tweaksField.value()); } catch { return toast("Tweaks must be valid JSON.", "err"); } }
             const genome = { prompt, tweaks }; const c = commit(genome); const short = c.slice(2, 10);
-            if (custody === 1) {
-              if (!(await canSeal())) throw new Error("This browser cannot do X25519 in WebCrypto.");
-              const env = await sealedEnvelope(genome, state.cfg.enclavePublicKey);
-              await doRevise(c, env, "onchain:EnvelopePublished");
-            } else {
-              const { envelope: env, keyHex } = await authoredEnvelope(genome);
-              downloadJson(env, `brain-${short}.authored.json`);
-              await new Promise((resolve) => { const m = modal({ title: "Your new genome key", body: el("div", {}, el("p", {}, el("strong", {}, "Copy this now."), " The new generation's jar opens only with it."), el("pre", { class: "keybox" }, el("code", {}, keyHex))), actions: [{ label: "Copy", onClick: async () => { try { await navigator.clipboard.writeText(keyHex); toast("Copied", "ok"); } catch {} } }, { label: "I have saved it", kind: "primary", onClick: () => { m.close(); resolve(); } }], onClose: resolve }); });
-              await doRevise(c, null, `local:brain-${short}.authored.json`);
-            }
+            const { envelope: env, keyHex } = await authoredEnvelope(genome);
+            downloadJson(env, `brain-${short}.authored.json`);
+            await new Promise((resolve) => { const m = modal({ title: "Your new genome key", body: el("div", {}, el("p", {}, el("strong", {}, "Copy this now."), " The new generation's jar opens only with it."), el("pre", { class: "keybox" }, el("code", {}, keyHex))), actions: [{ label: "Copy", onClick: async () => { try { await navigator.clipboard.writeText(keyHex); toast("Copied", "ok"); } catch {} } }, { label: "I have saved it", kind: "primary", onClick: () => { m.close(); resolve(); } }], onClose: resolve }); });
+            await doRevise(c, null, `local:brain-${short}.authored.json`, "0x");
           } catch (e) { toast(act.explain(e), "err"); }
-        } }, custody === 1 ? "Seal and revise" : "Encrypt and revise"))));
+        } }, "Encrypt and revise"))));
 
   // identity: name + seat
   const nameField = textField({ label: "Name (permanent)", placeholder: "Umbra", tip: TIPS.name });

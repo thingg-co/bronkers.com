@@ -248,7 +248,7 @@
                         </tr>
                         <tr>
                             <td>"They train between fights."</td>
-                            <td>An owner can revise a brain into a new generation (<code>revise</code>), committed before it trades. The guard keeps it in training camp: own-book trades only until it has sparred the minimum and the notice period has passed; every trade stays attributed to the generation that made it; the high-water mark carries, so revising never resets fees. Sealed brains are coached inside the jar.</td>
+                            <td>A sealed brain is coached, never rewritten: the enclave appends the owner's note to the current prompt and countersigns the revision (<code>verifyRevision</code>: executor key over the parent → next commitment edge); the chain refuses a sealed revision without it, so a new strategy can't be swapped in under an old record. Every generation is committed before it trades, spars in training camp before touching the vault, keeps its trades attributed, and the high-water mark carries.</td>
                         </tr>
                         <tr>
                             <td>"Bring your own brain juice."</td>

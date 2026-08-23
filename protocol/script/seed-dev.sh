@@ -119,7 +119,11 @@ G2b=$(cd agent && ENCLAVE_PUBLIC_KEY="$ENCLAVE_PUB" npm run --silent genome -- s
   "You are a patient mean-reversion trader. Buy weakness, sell strength, size small. Coach's note 1: hold longer; size smaller after two losses in a row." '{"style":"mean-reversion","revisions":[{"n":1,"brief":"hold longer; size smaller after two losses in a row"}]}' ./genome.dev2b.json)
 C2b=$(echo "$G2b" | grep commitment | grep -oE '0x[0-9a-fA-F]{64}')
 publish 2 genome.dev2b.json
-send --private-key $OWNER_KEY $NFT "revise(uint256,bytes32,string,string)" 2 "$C2b" "claude-sonnet-5" "onchain:EnvelopePublished"
+# sealed revisions are additive-only and must be countersigned by the enclave's
+# executor key over (chainid, guard, tokenId, parent, next) — as /train does
+INNER=$(cast keccak "$(cast abi-encode "f(uint256,address,uint256,bytes32,bytes32)" "$(cast chain-id --rpc-url $RPC)" $GUARD 2 "$C2" "$C2b")")
+ATT=$(cast wallet sign --private-key $EXECUTOR_KEY "$INNER")
+send --private-key $OWNER_KEY $NFT "revise(uint256,bytes32,string,string,bytes)" 2 "$C2b" "claude-sonnet-5" "onchain:EnvelopePublished" "$ATT"
 echo "   Nocturne: generation $(call $NFT "generationOf(uint256)(uint32)" 2), in camp"
 
 echo "── brain #3: authored, intern, no trades, unnamed ──"

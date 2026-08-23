@@ -19,7 +19,7 @@ export const nftAbi = parseAbi([
   "function publishEnvelope(uint256,bytes)",
   "function tokenURI(uint256) view returns (string)",
   "function mint(bytes32,uint8,uint8,uint8,string,string,address[],uint16,uint16) returns (uint256)",
-  "function revise(uint256,bytes32,string,string)",
+  "function revise(uint256,bytes32,string,string,bytes)",
   "function generationOf(uint256) view returns (uint32)",
   "function generationAt(uint256,uint32) view returns (bytes32 commitment, string model, string encryptedPromptCID, uint64 sinceBlock, uint64 sinceTime)",
   "function safeTransferFrom(address,address,uint256)",

@@ -144,9 +144,15 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol` and
 - `TraderNFT.cadenceOf`, `ExecutionGuard.cadenceIntervalOf / tradeIntervalOf /
   nextTradeAt` — the declared cadence and the interval the guard enforces
   between trades (owner's `minTradeInterval` floored at 1 day / cadence).
-- `TraderNFT.revise / generationOf / generationAt` and `GenomeRevised`,
-  `ExecutionGuard.campStatus / campDone` — generations and the training camp;
-  trades are attributed to generations by block.
+- `TraderNFT.revise(id, commitment, model, cid, attestation) / generationOf /
+  generationAt` and `GenomeRevised`, `ExecutionGuard.revisionDigest /
+  verifyRevision / campStatus / campDone` — generations and the training camp;
+  trades are attributed to generations by block. Sealed custody is
+  additive-only: `revise` requires the executor key's signature over the
+  parent → next commitment edge, which only the enclave's `/train` issues
+  (it appends the coach's note to the current prompt and countersigns);
+  authored custody passes `0x`. The desk's training panel reflects this:
+  sealed brains take a brief, authored brains a new prompt.
 - `ExecutionGuard.runtimeFeeOf / maxRuntimeFee / setRuntimeFee /
   pendingRuntimeFeeOf / runtimeFeeDelay / minFeeNotionalBps / registry` and the
   `RuntimeFeePaid` / `RuntimeFeeScheduled` events — the per-trade reimbursement a

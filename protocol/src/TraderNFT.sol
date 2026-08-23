@@ -237,15 +237,32 @@ contract TraderNFT is ERC721, ITraderNFT {
     }
 
     /// @notice Revise the brain: append a generation with a new commitment
-    /// (and model). Owner-only. The old generation's trades stay attributed to
+    /// (and model). Owner-only; sealed custody additionally needs the
+    /// enclave's attestation (see body). The old generation's trades stay attributed to
     /// it; the new one is in training camp until the guard has seen enough
     /// own-book trades under it and the notice period has passed. Sealed
     /// brains publish the new jar alongside.
-    function revise(uint256 tokenId, bytes32 commitment, string calldata model, string calldata encryptedPromptCID) external {
+    function revise(
+        uint256 tokenId,
+        bytes32 commitment,
+        string calldata model,
+        string calldata encryptedPromptCID,
+        bytes calldata attestation
+    ) external {
         require(msg.sender == ownerOf(tokenId), "Trader: not owner");
         require(commitment != bytes32(0), "Trader: empty commitment");
         require(commitment != _genomes[tokenId].commitment, "Trader: same genome");
         Genome storage g = _genomes[tokenId];
+        // Sealed custody is additive-only: the next genome is composed in the
+        // enclave from the current one (a coach's note appended, never a
+        // rewrite) and the enclave countersigns the parent -> next edge with
+        // the brain's executor key. Without that signature there is nothing an
+        // owner can commit, so a sealed record's lineage cannot be swapped out
+        // from under it. Authored custody carries no such proof: the owner
+        // holds the plaintext, and the lineage is their claim.
+        if (g.custody != CUSTODY_AUTHORED) {
+            require(guard.verifyRevision(tokenId, g.commitment, commitment, attestation), "Trader: revision not attested");
+        }
         g.commitment = commitment;
         g.model = model;
         g.encryptedPromptCID = encryptedPromptCID;

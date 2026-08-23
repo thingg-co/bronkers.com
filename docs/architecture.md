@@ -298,6 +298,20 @@ orders and the enclave has to apply the guard's policy to what it will sign.
 
 ## 3. Genome lifecycle
 
+Sealed revisions are additive-only and enclave-attested: `TraderNFT.revise` for
+custody 1 and 2 requires a signature by the brain's current executor key over
+`ExecutionGuard.revisionDigest(tokenId, parentCommitment, newCommitment)` (an
+EIP-191 hash that also binds the chain id and the guard address, so
+attestations cannot be replayed across chains, instances, brains, or stale
+parents). The only signer of that digest is the farm's `/train`, and it signs
+only genomes it composed itself — `composeRevision` appends the coach's note to
+the current prompt and never rewrites it — so a sealed brain's generation N+1
+is, modulo enclave trust, a strict extension of generation N. A wholesale
+strategy swap has no signer and cannot be committed. Authored custody revises
+unattested; the owner holds the plaintext and the lineage is their claim.
+Verification lives in the guard because `TraderNFT` sits against the contract
+size limit.
+
 Custody is a public on-chain trait (`Genome.custody`): 0 authored, 1 sealed-authored,
 2 sealed-generated. Sealed is the default recommendation.
 
@@ -478,7 +492,7 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Executor churns trades to farm the runtime fee | fee capped per trade, trades rate-limited on-chain to the declared cadence (at most cadence × cap a day), and no fee on trades under `minFeeNotionalBps` of NAV | same |
 | Operator paid for work it did not do (wrong model, no model) | fee paid only to an executor the registry marks attested; each trade carries the transcript hash for audit | hardware-attested registration through the DCAP adapter; transcripts disclosed on request |
 | Fee raised on depositors without notice | raises take effect after `runtimeFeeDelay`; lowering is immediate | same, with a longer period |
-| Strategy swapped under depositors' money | a revision is committed before it trades, spars `campMinTrades` own-book trades and waits `revisionNotice` before the vault; trades stay attributed to their generation; HWM carries | same, longer notice |
+| Strategy swapped under depositors' money | sealed revisions are additive-only: the chain accepts only enclave-countersigned parent→next edges, and the enclave only signs appended coach's notes; plus camp (`campMinTrades` own-book spars, `revisionNotice`), per-generation attribution, HWM carry | same, with the signature from an attested TEE |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
 | Seller's API key spent on the buyer's brain, or buyer's brain leaking to the seller's account | a credential is active only while `publisher == ownerOf`; the farm rebuilds on change | same |
 | Owner exfiltrates the sealed prompt through a bring-your-own inference endpoint | owner may bring a key, not an endpoint: hosts allowlisted by the operator, https only | same, allowlist = attested TEE gateways |

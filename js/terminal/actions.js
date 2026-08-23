@@ -169,12 +169,12 @@ export async function composeWithEnclave(brief, tweaks) {
   const res = await fetch(`${url}/compose`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ brief, tweaks: tweaks || {} }) });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `enclave returned ${res.status}`);
-  if (!json.commitment || !json.envelope) throw new Error("enclave returned an incomplete answer");
+  if (!json.commitment || !json.envelope || !json.attestation) throw new Error("enclave returned an incomplete answer");
   return json;
 }
 
 /** Append a generation: a new commitment (and model) the brain will trade under once it has sparred. */
-export const revise = (id, commitment, model, cid) => [{ label: `Revise brain #${id}: commit the next generation`, run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "revise", args: [BigInt(id), commitment, model, cid] }) }];
+export const revise = (id, commitment, model, cid, attestation = "0x") => [{ label: `Revise brain #${id}: commit the next generation`, run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "revise", args: [BigInt(id), commitment, model, cid, attestation] }) }];
 
 /** Coach a sealed brain: the enclave appends the note to the current genome, seals the next generation, and returns only the commitment and the ciphertext. */
 export async function trainWithEnclave(id, brief) {

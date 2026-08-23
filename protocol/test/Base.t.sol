@@ -24,7 +24,8 @@ abstract contract BaseTest is Test {
     TraderNFT nft;
 
     address owner = makeAddr("owner");
-    address executor = makeAddr("executor");
+    uint256 internal executorPk = uint256(keccak256("brokners.executor"));
+    address executor = vm.addr(uint256(keccak256("brokners.executor")));
     address lp = makeAddr("lp");
     address buyer = makeAddr("buyer");
     address stranger = makeAddr("stranger");
@@ -59,6 +60,13 @@ abstract contract BaseTest is Test {
     /// Paper-season config; most suites disable it, Integrity.t.sol overrides.
     function seasonParams() internal pure virtual returns (uint64 duration, uint32 minTrades) {
         return (0, 0);
+    }
+
+    /// The enclave's countersignature over a revision edge (parent -> next),
+    /// signed with the executor key, as the farm's /train produces it.
+    function attestRevision(uint256 id, bytes32 parent, bytes32 next) internal view returns (bytes memory) {
+        (uint8 v, bytes32 r, bytes32 s_) = vm.sign(executorPk, guard.revisionDigest(id, parent, next));
+        return abi.encodePacked(r, s_, v);
     }
 
     function mintTrader(uint16 mgmtBps, uint16 perfBps) internal returns (uint256 tokenId) {

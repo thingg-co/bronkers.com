@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
-import { encodePacked, formatUnits, keccak256, parseUnits, stringToBytes, toHex, type Address, type Hex } from "viem";
+import { encodeAbiParameters, encodePacked, formatUnits, keccak256, parseUnits, stringToBytes, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { credentialsAbi, erc20Abi, guardAbi, registryAbi, traderNftAbi, vaultAbi } from "./abi.js";
 import { createBrain, describeBackend, type Brain, type OwnedInference } from "./brain.js";
@@ -54,8 +54,11 @@ import { buildTranscript, saveTranscript } from "./transcript.js";
  * the new commitment and runs the new generation; while the guard has it in
  * training camp it spars on the own book only. POST /train {tokenId, brief}
  * coaches a sealed brain: the enclave opens the current jar, appends the
- * note, seals the next generation and returns {commitment, envelope}; the
- * owner publishes and revises. No plaintext leaves.
+ * note (additive-only by construction), seals the next generation, and
+ * countersigns the parent -> next commitment edge with the executor key —
+ * the chain refuses a sealed revision without that signature, so nothing but
+ * an enclave-derived descendant can ever be committed. Returns {commitment,
+ * envelope, attestation}; the owner publishes and revises. No plaintext leaves.
  *
  * Credentials: an owner may publish a sealed credential for their brain
  * (Credentials.publish; CREDENTIALS_ADDRESS). The farm opens the "inference"
@@ -587,9 +590,18 @@ function startHttp(): void {
           if (commit(current) !== onChain.commitment) throw new Error("the published jar does not match the current generation; publish the current jar first");
           const next = composeRevision(current, brief);
           const generation = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "generationOf", args: [id] });
+          const nextCommitment = commit(next);
+          // countersign the revision edge: ExecutionGuard.revisionDigest is the
+          // EIP-191 hash of (chainid, guard, tokenId, parent, next); signMessage
+          // applies the prefix, so we sign the raw inner hash
+          const inner = keccak256(encodeAbiParameters(
+            [{ type: "uint256" }, { type: "address" }, { type: "uint256" }, { type: "bytes32" }, { type: "bytes32" }],
+            [BigInt(chainId), config.guard, id, onChain.commitment, nextCommitment],
+          ));
+          const attestation = await walletClient().account.signMessage({ message: { raw: inner } });
           // the plaintext of both generations exists only in this scope
           res.writeHead(200, cors);
-          res.end(JSON.stringify({ commitment: commit(next), envelope: seal(JSON.stringify(next), enclavePub), generation: Number(generation) + 1, custody: onChain.custody }));
+          res.end(JSON.stringify({ commitment: nextCommitment, envelope: seal(JSON.stringify(next), enclavePub), attestation, generation: Number(generation) + 1, custody: onChain.custody }));
         } catch (e) {
           res.writeHead(400, cors);
           res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));

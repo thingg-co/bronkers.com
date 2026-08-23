@@ -95,7 +95,18 @@ session needs to know that the code doesn't say.
   has the lever.
 - Paper season gates vault deposits (own-book trades first, fromVault=false).
 - **Generations and training camp** (Aug 2026): `revise(id, commitment, model,
-  cid)` owner-only, appends; `generationOf/generationAt/GenomeRevised`; the
+  cid, attestation)` owner-only, appends. **Sealed revisions are additive-only
+  via the enclave** (Aug 2026): custody 1 and 2 require `attestation` — the
+  executor key's EIP-191 signature over `ExecutionGuard.revisionDigest(id,
+  parent, next)` = keccak(chainid, guard, tokenId, parentCommitment,
+  newCommitment) — which only the farm's `/train` produces, and it only signs
+  genomes it derived itself (`composeRevision` appends a coach's note, never
+  rewrites). Owners of sealed brains coach with a brief; they cannot commit a
+  replacement prompt (the Terminal's "Seal and revise" free-prompt path for
+  custody 1 was removed). Authored custody revises unattested (owner holds the
+  plaintext; lineage is their claim). `verifyRevision` lives in the guard
+  because TraderNFT is ~160 B under the size limit — keep new logic out of
+  TraderNFT. `generationOf/generationAt/GenomeRevised`; the
   guard keys `campTradesOf[id][gen]` on own-book trades and refuses vault trades
   for a revised generation until `campMinTrades` spars and `revisionNotice`
   (`setCamp`; 1 spar + 0 locally, 86400 on testnet); HWM carries (tests in

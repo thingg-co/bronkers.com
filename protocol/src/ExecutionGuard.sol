@@ -3,6 +3,8 @@ pragma solidity ^0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IRuntimeRegistry, ITraderNFT, IVenue} from "./interfaces/ITraderNFT.sol";
 import {TraderVault} from "./TraderVault.sol";
@@ -335,6 +337,31 @@ contract ExecutionGuard is ReentrancyGuard {
     }
 
     // ---- owner administration (control follows ownerOf live) ----
+
+    /// @notice The digest a revision attestation signs: this chain, this guard,
+    /// the brain, and the parent -> next commitment edge. The enclave signs it
+    /// with the brain's executor key, and only for a genome it derived itself
+    /// (append-only coaching), so a sealed brain's lineage is additive by
+    /// construction: a wholesale strategy swap has no signer.
+    function revisionDigest(uint256 tokenId, bytes32 parent, bytes32 next) public view returns (bytes32) {
+        return MessageHashUtils.toEthSignedMessageHash(
+            keccak256(abi.encode(block.chainid, address(this), tokenId, parent, next))
+        );
+    }
+
+    /// @notice True if `sig` is the current executor's signature over this
+    /// revision edge. TraderNFT.revise requires it for sealed custody; the
+    /// stale-parent case fails naturally because the parent is in the digest.
+    function verifyRevision(uint256 tokenId, bytes32 parent, bytes32 next, bytes calldata sig)
+        external
+        view
+        returns (bool)
+    {
+        address exec = policyOf[tokenId].executor;
+        if (exec == address(0)) return false;
+        (address rec, ECDSA.RecoverError err,) = ECDSA.tryRecover(revisionDigest(tokenId, parent, next), sig);
+        return err == ECDSA.RecoverError.NoError && rec == exec;
+    }
 
     function setExecutor(uint256 tokenId, address executor) external onlyTraderOwner(tokenId) {
         policyOf[tokenId].executor = executor;

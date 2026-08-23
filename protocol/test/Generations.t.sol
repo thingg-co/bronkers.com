@@ -35,22 +35,23 @@ contract GenerationsTest is BaseTest {
         assertEq(c0, keccak256("genome-fixture"));
         assertEq(b0, uint64(block.number));
 
+        bytes memory att = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
         vm.prank(stranger);
         vm.expectRevert("Trader: not owner");
-        nft.revise(id, keccak256("v2"), "claude-opus-5", "cid-v2");
+        nft.revise(id, keccak256("v2"), "claude-opus-5", "cid-v2", att);
         vm.prank(owner);
         vm.expectRevert("Trader: empty commitment");
-        nft.revise(id, bytes32(0), "m", "cid");
+        nft.revise(id, bytes32(0), "m", "cid", att);
         vm.prank(owner);
         vm.expectRevert("Trader: same genome");
-        nft.revise(id, keccak256("genome-fixture"), "m", "cid");
+        nft.revise(id, keccak256("genome-fixture"), "m", "cid", att);
 
         vm.warp(vm.getBlockTimestamp() + 1 hours);
         vm.roll(block.number + 10);
         vm.prank(owner);
         vm.expectEmit(true, false, false, true);
         emit GenomeRevised(id, 1, keccak256("v2"), "claude-opus-5");
-        nft.revise(id, keccak256("v2"), "claude-opus-5", "cid-v2");
+        nft.revise(id, keccak256("v2"), "claude-opus-5", "cid-v2", att);
 
         assertEq(nft.generationOf(id), 1);
         assertEq(nft.genomeOf(id).commitment, keccak256("v2"));
@@ -75,8 +76,9 @@ contract GenerationsTest is BaseTest {
 
         guard.setCamp(2, 1 days);
         vm.warp(vm.getBlockTimestamp() + 6 hours);
+        bytes memory att = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
         vm.prank(owner);
-        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2");
+        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2", att);
         (uint32 gen, bool inCamp, uint32 trades, uint32 minTrades, uint64 vaultFrom) = guard.campStatus(id);
         assertEq(gen, 1);
         assertTrue(inCamp);
@@ -142,8 +144,9 @@ contract GenerationsTest is BaseTest {
         assertGt(hwm, 1e18);
 
         router.setPrice(address(weth), address(usdc), WETH_PRICE); // back down: under water
+        bytes memory att = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
         vm.prank(owner);
-        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2");
+        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2", att);
         vault.checkpoint();
         assertEq(vault.highWaterMark(), hwm, "a new generation starts under the old mark");
         (uint256 mgmt, uint256 perf,) = vault.pendingFees();
@@ -152,10 +155,61 @@ contract GenerationsTest is BaseTest {
 
     function test_TokenURICarriesTheGeneration() public {
         uint256 id = mintTrader(200, 2_000);
+        bytes memory att = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
         vm.prank(owner);
-        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2");
+        nft.revise(id, keccak256("v2"), "claude-sonnet-5", "cid-v2", att);
         string memory uri = nft.tokenURI(id);
         assertGt(bytes(uri).length, 400);
+        assertEq(nft.generationOf(id), 1);
+    }
+
+    /// Sealed custody is additive-only: without the enclave's countersignature
+    /// over the parent -> next edge there is nothing an owner can commit.
+    function test_SealedReviseRequiresEnclaveAttestation() public {
+        uint256 id = mintTrader(200, 2_000);
+        // no signature
+        vm.prank(owner);
+        vm.expectRevert("Trader: revision not attested");
+        nft.revise(id, keccak256("swap"), "m", "cid", "");
+        // signed by someone who is not the executor
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(uint256(keccak256("mallory")), guard.revisionDigest(id, keccak256("genome-fixture"), keccak256("swap")));
+        vm.prank(owner);
+        vm.expectRevert("Trader: revision not attested");
+        nft.revise(id, keccak256("swap"), "m", "cid", abi.encodePacked(r, s, v));
+        // signed over a different edge (stale parent): replay fails
+        bytes memory att2 = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
+        vm.prank(owner);
+        nft.revise(id, keccak256("v2"), "m", "cid", att2);
+        vm.prank(owner);
+        vm.expectRevert("Trader: revision not attested");
+        nft.revise(id, keccak256("v3"), "m", "cid", att2);
+        // the right edge, signed by the executor, passes
+        bytes memory att3 = attestRevision(id, keccak256("v2"), keccak256("v3"));
+        vm.prank(owner);
+        nft.revise(id, keccak256("v3"), "m", "cid", att3);
+        assertEq(nft.generationOf(id), 2);
+    }
+
+    /// A sealed brain with no executor set has no one to attest: it cannot be
+    /// revised until it is enrolled.
+    function test_SealedReviseNeedsAnExecutor() public {
+        uint256 id = mintTrader(200, 2_000);
+        vm.prank(owner);
+        guard.setExecutor(id, address(0));
+        bytes memory att = attestRevision(id, keccak256("genome-fixture"), keccak256("v2"));
+        vm.prank(owner);
+        vm.expectRevert("Trader: revision not attested");
+        nft.revise(id, keccak256("v2"), "m", "cid", att);
+    }
+
+    /// Authored custody carries no proof either way; the owner revises freely.
+    function test_AuthoredReviseNeedsNoAttestation() public {
+        address[] memory universe = new address[](1);
+        universe[0] = address(weth);
+        vm.prank(owner);
+        uint256 id = nft.mint(keccak256("authored"), 1, 4, 0, "claude-sonnet-5", "local:file", universe, 200, 2_000);
+        vm.prank(owner);
+        nft.revise(id, keccak256("authored-v2"), "m", "local:file2", "");
         assertEq(nft.generationOf(id), 1);
     }
 }

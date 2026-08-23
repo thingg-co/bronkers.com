@@ -11,7 +11,7 @@ export const traderNftAbi = parseAbi([
   "function nextId() view returns (uint256)",
   "function liveSupply() view returns (uint256)",
   "function burnedCount() view returns (uint256)",
-  "function revise(uint256 tokenId, bytes32 commitment, string model, string encryptedPromptCID)",
+  "function revise(uint256 tokenId, bytes32 commitment, string model, string encryptedPromptCID, bytes attestation)",
   "function generationOf(uint256 tokenId) view returns (uint32)",
   "function generationSince(uint256 tokenId, uint32 generation) view returns (uint64)",
   "function generationAt(uint256 tokenId, uint32 generation) view returns (bytes32 commitment, string model, string encryptedPromptCID, uint64 sinceBlock, uint64 sinceTime)",
