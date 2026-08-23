@@ -31,7 +31,7 @@ DEPLOY_OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url $RPC --pr
 addr() { echo "$DEPLOY_OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 USDC=$(addr "mUSDC:"); WETH=$(addr "mWETH:"); WBTC=$(addr "mWBTC:"); ROUTER=$(addr "Router:")
 GUARD=$(addr "Guard:"); NFT=$(addr "TraderNFT:"); REG=$(addr "RuntimeReg:"); MARKET=$(addr "Market:")
-ETHFEED=$(addr "EthFeed:"); BTCFEED=$(addr "BtcFeed:")
+ETHFEED=$(addr "EthFeed:"); BTCFEED=$(addr "BtcFeed:"); CREDS=$(addr "Credentials:")
 [ -n "$NFT" ] || { echo "deploy failed:"; echo "$DEPLOY_OUT" | tail -20; exit 1; }
 
 # a fresh chain means fresh books: the farm's ledger and transcripts belong to the chain that was just replaced
@@ -85,6 +85,9 @@ send --private-key $OWNER_KEY $GUARD "setExecutor(uint256,address)" 1 $EXECUTOR_
 send --private-key $OWNER_KEY $NFT "christen(uint256,string)" 1 "Umbra"
 publish 1 genome.dev1.json
 send --private-key $OWNER_KEY $GUARD "setRuntimeFee(uint256,uint256)" 1 1ether   # Umbra pays its executor 1 mUSDC per trade
+send --private-key $OWNER_KEY $USDC "mint(address,uint256)" $OWNER_ADDR 25ether
+send --private-key $OWNER_KEY $USDC "approve(address,uint256)" $GUARD 25ether
+send --private-key $OWNER_KEY $GUARD "fundRuntime(uint256,uint256)" 1 25ether   # 25 mUSDC of rent escrowed: pays the fee when the book cannot
 fund_and_authorise_tba 1 1000ether
 tick 1 ./genome.dev1.json --own-book
 VAULT1=$(call $NFT "vaultOf(uint256)(address)" 1)
@@ -149,6 +152,7 @@ cat <<EOF
     enclavePublicKey: "$ENCLAVE_PUB",
     registry: "$REG",
     hostMarket: "$MARKET",
+    credentials: "$CREDS",
     ethFeed: "$ETHFEED",
     btcFeed: "$BTCFEED",
 
@@ -157,20 +161,20 @@ LP wallet  (anvil #2, holds Umbra shares):        $LP_KEY
 
 the farm (enclave runtime that runs every enrolled brain and pays its own lease; #1 and #2 are enrolled and published):
   cd agent && set -a && . ./.dev-enclave.env && set +a && \\
-  RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER REGISTRY_ADDRESS=$REG \\
+  RPC_URL=$RPC TRADER_NFT_ADDRESS=$NFT GUARD_ADDRESS=$GUARD ROUTER_ADDRESS=$ROUTER REGISTRY_ADDRESS=$REG CREDENTIALS_ADDRESS=$CREDS \\
   FARM_HOST=market FARM_HOST_MARKET=$MARKET FARM_HOST_JOB_ID=$JOB FARM_NATIVE_PRICE=2000 \\
   FARM_HTTP_PORT=8787 EXECUTOR_PRIVATE_KEY=$EXECUTOR_KEY npm run farm -- --mock-brain
 EOF
 
 # keep js/config.js's anvil block in sync with what was just deployed (SEED_CONFIG=0 skips this)
 if [ "${SEED_CONFIG:-1}" != "0" ]; then
-python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" "$MARKET" "$ETHFEED" "$BTCFEED" <<'PY'
+python3 - "$NFT" "$GUARD" "$ROUTER" "$USDC" "$WETH" "$WBTC" "$ENCLAVE_PUB" "$EXECUTOR_ADDR" "$REG" "$MARKET" "$ETHFEED" "$BTCFEED" "$CREDS" <<'PY'
 import re, sys, pathlib
-nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry, market, ethFeed, btcFeed = sys.argv[1:]
+nft, guard, router, usdc, weth, wbtc, epk, enclaveExecutor, registry, market, ethFeed, btcFeed, credentials = sys.argv[1:]
 p = pathlib.Path("js/config.js"); t = p.read_text()
 start = t.index("    31337: {"); end = t.index("    },", start)
 block = t[start:end]
-for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry, hostMarket=market, ethFeed=ethFeed, btcFeed=btcFeed).items():
+for k, v in dict(traderNFT=nft, guard=guard, router=router, usdc=usdc, weth=weth, wbtc=wbtc, enclavePublicKey=epk, enclaveExecutor=enclaveExecutor, registry=registry, hostMarket=market, ethFeed=ethFeed, btcFeed=btcFeed, credentials=credentials).items():
     block = re.sub(rf'(\s{k}: )"[^"]*"', rf'\g<1>"{v}"', block)
 p.write_text(t[:start] + block + t[end:])
 print("js/config.js anvil block updated")

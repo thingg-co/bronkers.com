@@ -113,6 +113,21 @@ session needs to know that the code doesn't say.
   (owner-only, once, ≤32 bytes). `TraderNFT.publishEnvelope` emits the sealed
   jar as `EnvelopePublished` (sealed custody only) so the farm can run a brain
   with no file handoff. Views.t.sol.
+- **Bring your own key** (Aug 2026): `Credentials.sol` (separate contract; deployed
+  last by Deploy.s.sol, `credentials` in config.js / `CREDENTIALS_ADDRESS` for the
+  farm) holds owner-supplied secrets as sealed events: `publish(tokenId, kind,
+  envelope)` / `revoke` owner-only, `credentialOf` → `active` only while
+  `publisher == ownerOf` (a sale retires the seller's key; no transfer hook
+  needed). Envelopes are ECIES to the enclave key under HKDF info
+  `brokners-credentials-v1` (domain-separated from the genome; crypto.js
+  `sealedCredential` ↔ agent `credentials.ts`), plaintext bound to `{chainId,
+  tokenId, kind}`. The farm understands kind `inference` (owner's Anthropic or
+  gateway key): `checkInference` allows only https hosts on the operator's list
+  (Anthropic, `INFERENCE_BASE_URL`, `FARM_INFERENCE_HOSTS`) — an owner brings a
+  **key, never an endpoint**, or the sealed prompt would leak through the URL.
+  Owner-paid tokens are priced at zero in the ledger (`Usage.paidBy`). My Desk →
+  Runtime → "Your own inference key". Credentials.t.sol + agent
+  credentials.test.ts.
 - **Brains run themselves:** enrolment = `setExecutor(tokenId, enclaveExecutor)`
   (config.js per chain); `agent: npm run farm` is the one enclave process that
   runs every enrolled brain (own book while unseasoned, vault once seasoned),

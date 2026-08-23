@@ -12,6 +12,10 @@
 import { keccak256, toBytes } from "https://esm.sh/viem@2.21.19";
 
 const HKDF_INFO = "brokners-genome-v2";
+// Owner-supplied credentials (an inference key) are sealed under their own
+// info, so a credential can never be opened as a genome or the reverse.
+// Mirrors agent/src/enclave.ts CREDENTIALS_INFO.
+const CREDENTIALS_INFO = "brokners-credentials-v1";
 const te = new TextEncoder();
 
 export function canonicalize(v) {
@@ -55,20 +59,37 @@ export async function canSeal() {
   }
 }
 
-/** Custody 1. Seals to the enclave public key (base64 SPKI DER, as printed by `genome keygen`). */
-export async function sealedEnvelope(genome, enclavePublicKeyB64) {
+async function eciesSeal(plaintext, enclavePublicKeyB64, info) {
   const enclavePub = await crypto.subtle.importKey("spki", unb64(enclavePublicKeyB64), { name: "X25519" }, false, []);
   const eph = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]);
   const shared = await crypto.subtle.deriveBits({ name: "X25519", public: enclavePub }, eph.privateKey, 256);
   const hkdfKey = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveBits"]);
   const rawKey = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: te.encode(HKDF_INFO) },
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: te.encode(info) },
     hkdfKey,
     256,
   );
-  const body = await aesGcmEncrypt(rawKey, JSON.stringify(genome));
+  const body = await aesGcmEncrypt(rawKey, plaintext);
   const epk = b64(await crypto.subtle.exportKey("spki", eph.publicKey));
   return { v: 2, mode: "sealed", epk, ...body };
+}
+
+/** Custody 1. Seals to the enclave public key (base64 SPKI DER, as printed by `genome keygen`). */
+export function sealedEnvelope(genome, enclavePublicKeyB64) {
+  return eciesSeal(JSON.stringify(genome), enclavePublicKeyB64, HKDF_INFO);
+}
+
+/**
+ * An owner-supplied credential for one brain on one chain, sealed to the
+ * enclave key under the credentials domain. `cred` is e.g.
+ * { kind: "inference", provider: "anthropic", apiKey }; the binding
+ * (v, chainId, tokenId, kind) is added here and checked by the farm, so a
+ * credential published under another brain is refused. The key never leaves
+ * this tab unencrypted.
+ */
+export function sealedCredential(cred, { chainId, tokenId }, enclavePublicKeyB64) {
+  const bound = { v: 1, chainId: Number(chainId), tokenId: String(tokenId), ...cred, kind: cred.kind };
+  return eciesSeal(JSON.stringify(bound), enclavePublicKeyB64, CREDENTIALS_INFO);
 }
 
 export function downloadJson(obj, filename) {

@@ -133,7 +133,7 @@ export async function render(root) {
 
       step(9, "Pay the harvester", {
         body: [
-          p("A brain pays its executor a runtime fee per trade, from the book it traded: owner-set, protocol-capped, bounded per day by the cadence, paid only to an attested executor and only on trades of real size, with raises announced. The harvester keeps an account per brain (fees in, model and gas out) and pauses a brain that overruns its credit; My Desk shows the account and the fee that would cover it."),
+          p("A brain pays its executor a runtime fee per trade, from the book it traded: owner-set, protocol-capped, bounded per day by the cadence, paid only to an attested executor and only on trades of real size, with raises announced. The harvester keeps an account per brain (fees in, model and gas out) and pauses a brain that overruns its credit; My Desk shows the account and the fee that would cover it. Rent can also be escrowed up front: when the book cannot cover a fee it is drawn from the escrow under the same caps, and refunded if the brain is reaped."),
           health && health.budget ? muted(`This harvester's books: income ${fmt.amt(BigInt(health.budget.income || 0), Number(health.budget.decimals || 18), 4)} ${health.budget.symbol || "mUSDC"}, cost ${fmt.amt(BigInt(health.budget.cost || 0), Number(health.budget.decimals || 18), 4)}.`) : null,
         ],
         actions: [el("a", { class: "btn", href: "#/dev" }, "The farm's books")],

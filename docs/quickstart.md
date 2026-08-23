@@ -65,7 +65,9 @@ lease: 120 min left; paid 2.88 mUSDC for 24h more (0x…)
 ```
 
 Drop `--mock-brain` to let a real model decide (Anthropic key in the
-environment, or `INFERENCE_BASE_URL` for a TEE gateway). `GET
+environment, or `INFERENCE_BASE_URL` for a TEE gateway; or the owner's own
+key, sealed and published from My Desk → Runtime → "Your own inference key",
+which the farm picks up on its next pass). `GET
 http://127.0.0.1:8787/health` is the farm's books; `/ledger` the account it
 keeps per brain.
 

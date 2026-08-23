@@ -36,6 +36,10 @@ export interface SealedEnvelope {
 }
 
 const HKDF_INFO = "brokners-genome-v2";
+/** Owner-supplied credentials are sealed under their own HKDF info, so a
+ *  credential envelope can never be opened as a genome or a genome as a
+ *  credential, whatever is published where. */
+export const CREDENTIALS_INFO = "brokners-credentials-v1";
 
 /** The enclave's public key, derived from its private key (base64 SPKI). */
 export function enclavePublicKeyOf(privateKeyB64: string): string {
@@ -89,11 +93,11 @@ export function enclaveKeygen(): { publicKeyB64: string; privateKeyB64: string }
   };
 }
 
-function deriveKey(shared: Buffer): Buffer {
-  return Buffer.from(hkdfSync("sha256", shared, Buffer.alloc(0), HKDF_INFO, 32));
+function deriveKey(shared: Buffer, info: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", shared, Buffer.alloc(0), info, 32));
 }
 
-export function seal(plaintext: string, enclavePublicKeyB64: string): SealedEnvelope {
+export function seal(plaintext: string, enclavePublicKeyB64: string, info: string = HKDF_INFO): SealedEnvelope {
   const enclavePub = createPublicKey({
     key: Buffer.from(enclavePublicKeyB64, "base64"),
     type: "spki",
@@ -101,7 +105,7 @@ export function seal(plaintext: string, enclavePublicKeyB64: string): SealedEnve
   });
   const ephemeral = generateKeyPairSync("x25519");
   const shared = diffieHellman({ privateKey: ephemeral.privateKey, publicKey: enclavePub });
-  const key = deriveKey(shared);
+  const key = deriveKey(shared, info);
   const iv = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([c.update(plaintext, "utf8"), c.final()]);
@@ -115,7 +119,7 @@ export function seal(plaintext: string, enclavePublicKeyB64: string): SealedEnve
   };
 }
 
-export function unseal(env: SealedEnvelope, enclavePrivateKeyB64: string): string {
+export function unseal(env: SealedEnvelope, enclavePrivateKeyB64: string, info: string = HKDF_INFO): string {
   const enclavePriv = createPrivateKey({
     key: Buffer.from(enclavePrivateKeyB64, "base64"),
     type: "pkcs8",
@@ -123,7 +127,7 @@ export function unseal(env: SealedEnvelope, enclavePrivateKeyB64: string): strin
   });
   const epk = createPublicKey({ key: Buffer.from(env.epk, "base64"), type: "spki", format: "der" });
   const shared = diffieHellman({ privateKey: enclavePriv, publicKey: epk });
-  const key = deriveKey(shared);
+  const key = deriveKey(shared, info);
   const d = createDecipheriv("aes-256-gcm", key, Buffer.from(env.iv, "base64"));
   d.setAuthTag(Buffer.from(env.tag, "base64"));
   return Buffer.concat([d.update(Buffer.from(env.ciphertext, "base64")), d.final()]).toString("utf8");

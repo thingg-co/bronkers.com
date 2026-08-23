@@ -34,6 +34,10 @@ window.BROKNERS_CONFIG = {
       // The machine market the farm pays its lease into (the mock Oyster market here;
       // Marlin's on Arbitrum One in production). Informational: the farm reads it.
       hostMarket: "0xBEc49fA140aCaA83533fB00A2BB19bDdd0290f25",
+      // Credentials: owner-supplied secrets (an inference key) sealed to the enclave
+      // key and published as events; active only while the publisher owns the brain.
+      // seed-dev.sh fills this in on each deploy.
+      credentials: "",
       // The paper venue's USD feeds (mock aggregators here; Chainlink on a public testnet).
       // The Developer tab's market lever writes the ETH feed.
       ethFeed: "0xcbEAF3BDe82155F56486Fb5a1072cb8baAf547cc",
@@ -63,6 +67,7 @@ window.BROKNERS_CONFIG = {
       enclaveExecutor: "",
       registry: "",
       hostMarket: "",
+      credentials: "",
       ethFeed: "0xF0d50568e3A7e8259E16663972b11910F89BD8e7",
       btcFeed: "0xe7656e23fE8077D438aEfbec2fAbDf2D8e070C4f",
       enclaveUrl: "",

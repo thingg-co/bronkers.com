@@ -30,7 +30,7 @@ if [ "$CHAIN" = "80002" ]; then
   echo "paper venue priced from Chainlink ETH/USD and BTC/USD on Amoy"
 fi
 OUT=$(cd protocol && forge script script/Deploy.s.sol --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast 2>&1)
-echo "$OUT" | grep -E "mWBTC|mUSDC|mWETH|Router|EthFeed|BtcFeed|Guard|TraderNFT|RuntimeReg|Market|DcapVerifier|6551 Registry|Account impl"
+echo "$OUT" | grep -E "mWBTC|mUSDC|mWETH|Router|EthFeed|BtcFeed|Guard|TraderNFT|RuntimeReg|Market|DcapVerifier|NitroVerifier|QuoteRouter|6551 Registry|Account impl"
 addr() { echo "$OUT" | grep "$1" | grep -oE '0x[0-9a-fA-F]{40}' | head -1; }
 cat <<CFG
 

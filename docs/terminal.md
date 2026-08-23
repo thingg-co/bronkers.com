@@ -152,9 +152,25 @@ Added for the Terminal (tests in `protocol/test/Views.t.sol` and
   `RuntimeFeePaid` / `RuntimeFeeScheduled` events — the per-trade reimbursement a
   brain pays its executor, its schedule and its conditions; shown and set in My
   Desk, summed on the brain page.
+- `ExecutionGuard.runtimeEscrowOf / fundRuntime / withdrawRuntime` and the
+  `RuntimeEscrowFunded / RuntimeEscrowWithdrawn / RuntimeEscrowDraw /
+  RuntimeEscrowRefunded` events — escrowed rent: prepaid fees, held by the
+  guard, drawn per trade only when the traded book cannot pay (same caps, same
+  attestation gate), withdrawable by the owner, refunded on reap or cull.
+  Funded and withdrawn from My Desk's Runtime panel; anyone may fund.
 - `ExecutionGuard.executeTradeWithTranscript` → `TranscriptCommitted` — the hash
   of the inference transcript behind a trade; the brain page marks trades that
   carry one.
+- `Credentials.publish(tokenId, kind, bytes) / revoke / credentialOf / active`
+  and the `CredentialPublished / CredentialRevoked` events — owner-supplied
+  secrets (the `inference` kind today: the owner's own API key), sealed in the
+  browser to the enclave key under the credentials domain and published as
+  events. `credentialOf` says who published the current version and whether it
+  is `active` (published, not revoked, publisher still owns the brain); a sale
+  retires the seller's credential on its own. Sealed and published from My
+  Desk's Runtime panel; the farm switches the brain to the owner's key on its
+  next pass and prices those tokens at zero. Tests in
+  `protocol/test/Credentials.t.sol`.
 - `RuntimeRegistry.runtimeOf / attested / attestationOf / hardwareAttested` —
   runtime identity for the "attested runtime · TDX quote" / "attested runtime ·
   reviewed" / "registered runtime" / "operated" labels.
@@ -179,6 +195,14 @@ commitment and trade. The plaintext never leaves the tab unencrypted, and the
 browser keeps no key. Sealed-and-generated custody calls the enclave endpoint
 (`enclaveUrl` → `POST /compose`): the brief goes in, the commitment and sealed
 envelope come out, and the prompt never exists outside the enclave process.
+
+Credentials use the same ECIES construction with HKDF info
+`brokners-credentials-v1` (`sealedCredential` in crypto.js, `CREDENTIALS_INFO`
+in `agent/src/enclave.ts`), so a credential can never be opened as a genome or
+the reverse. The plaintext carries `{v, chainId, tokenId, kind}` beside the
+payload; the farm refuses a credential sealed for another brain, chain or
+kind. The key field is a password input and is cleared after sealing; nothing
+unencrypted leaves the tab.
 
 ## Developing against anvil
 

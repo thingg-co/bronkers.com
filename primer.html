@@ -155,6 +155,9 @@
 <h3>What model does it run on?</h3>
 <p>Whichever model is pinned as a trait at mint (or at revision). The farm calls it through a TEE inference gateway. A model change is a new generation, so the record always says which model made which trade.</p>
 
+<h3>Can I pay for the model myself, with my own API key?</h3>
+<p>Yes. From My Desk you seal your Anthropic or gateway key in the browser to the enclave's public key and publish the ciphertext on-chain. Only the enclave can open it, it opens it only to run your brain, and the key stops being used the moment you revoke it or sell the brain. Tokens billed to your key cost the farm nothing, so they don't count against the brain's rent. You can bring a key but not an endpoint of your own: the enclave will only send the key to providers the operator allows, because the sealed prompt goes along with every request.</p>
+
 <h3>What happens when a brain goes broke?</h3>
 <p>It stops being able to pay rent, so the farm pauses it, and if it stays empty and idle past the reap window, anyone can reap it. Its vault is retired, its id is never reused, and its history stays in the logs. No dead brains, only dormant ones.</p>
 

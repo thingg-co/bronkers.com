@@ -2,7 +2,7 @@
 import { formatUnits } from "https://esm.sh/viem@2.21.19";
 import * as act from "../actions.js";
 import { TIERS } from "../abi.js";
-import { authoredEnvelope, canSeal, commit, downloadJson, sealedEnvelope } from "../crypto.js";
+import { authoredEnvelope, canSeal, commit, downloadJson, sealedCredential, sealedEnvelope } from "../crypto.js";
 import { state } from "../chain.js";
 import { invalidate, loadBrain, loadFarmLedger, loadRoster, ringable } from "../data.js";
 import { addrChip, amountField, append, badge, clear, el, emptyState, fmt, kv, modal, spinner, textField, tip, toast } from "../ui.js";
@@ -20,6 +20,8 @@ const TIPS = {
   fee: "What this brain pays its executor per trade, from whichever book it traded, to cover gas and model calls. Capped by the protocol, paid at most once per declared-cadence interval (trades are rate-limited on-chain), skipped when the book has no cash, paid only to an attested executor and only on trades above the dust floor. Raises take effect after the notice period; lowering is immediate.",
   train: "Revise the brain: a new generation with a new commitment (and, if you like, a new model). It trades the brain's own wallet first; the vault waits until it has sparred the camp's minimum and the notice period has passed. The old generation's trades stay attributed to it; the high-water mark carries over.",
   brief: "A coach's note. The enclave appends it to the current sealed prompt, seals the next generation, and returns only the commitment and the ciphertext; nobody reads the result, including you.",
+  credential: "Your own inference key, sealed in this tab to the enclave key and published on-chain as ciphertext. The enclave opens it only to run this brain, and only while you own the brain: a sale retires it automatically, and you can revoke it here. Tokens billed to your key cost the enclave nothing, so the brain's account with it stops accruing model cost. The key never leaves this tab unencrypted.",
+  credentialHost: "Where the enclave may send your key. Anthropic keys go to api.anthropic.com. A gateway key goes to the enclave's own gateway unless you name another host the enclave allows; an arbitrary endpoint is refused, because the sealed prompt would travel with the request.",
   account: "The enclave keeps an account per brain: the runtime fees it has received against what the brain's ticks cost it (model tokens, gas). Fees only arrive on trades, so a brain that holds more than it trades runs on credit; past the operator's grace it is paused until the owner raises the fee.",
 };
 import { custodyBadge, jar, statusBadge } from "./floor.js";
@@ -58,6 +60,7 @@ async function manage(brain, refresh) {
   const rtBadge = rt.kind === "enclave" ? badge("Enrolled with the enclave", "good") : rt.kind === "self" ? badge("Self-hosted", "accent") : badge("Not running", "bad");
   const idBadge = rt.kind === "none" ? null : rt.attested ? badge(rt.attestation === 2 ? "attested runtime · TDX quote" : "attested runtime · reviewed", "good") : rt.registered ? badge("registered runtime", "accent") : badge("operated", "muted");
   const feeField = amountField({ label: "Runtime fee per trade", value: formatUnits(brain.runtimeFee || 0n, 18), tip: TIPS.fee });
+  const escrowField = amountField({ label: "Escrow rent (mUSDC)", value: "", tip: "Prepaid runtime fees, held by the guard. When the brain's traded book cannot cover a fee it is drawn from here instead — same caps, same attestation gate — so a thin book keeps its harvester. Withdraw any time; refunded to the owner if the brain is reaped." });
   const now = rt.now || Math.floor(Date.now() / 1000);
   const nextText = rt.nextDue ? (rt.nextDue > now ? `in about ${fmt.duration(rt.nextDue - now)}` : "due on the next pass") : "on the next pass";
   // the enclave's books for this brain, filled in once the endpoint answers
@@ -73,6 +76,7 @@ async function manage(brain, refresh) {
         el("h5", {}, "Account with the enclave ", tip(TIPS.account)),
         kv([
           ["Status", a.overBudget ? badge("paused: over budget", "bad") : badge(l.running ? "running" : "not running", l.running ? "good" : "muted")],
+          l.backend ? ["Inference", `${l.backend}${l.ownerPaysInference ? " (billed to you; not charged by the enclave)" : ""}`] : null,
           ["Paid to the enclave", `${B(a.feesPaid)} mUSDC over ${a.feePayments} trade${a.feePayments === 1 ? "" : "s"}`],
           ["Cost to run", `${B(a.cost)} mUSDC · ${a.ticks} tick${a.ticks === 1 ? "" : "s"}, ${a.trades} trade${a.trades === 1 ? "" : "s"} (model ${B(a.inferenceCost)}, gas ${B(a.gasCost)})`],
           ["Credit left", `${B(a.credit)} mUSDC (the enclave extends ${B(l.grace)} of credit; raising the fee resets it)`],
@@ -82,6 +86,39 @@ async function manage(brain, refresh) {
       ]);
     });
   }
+  // credentials: the owner's own inference key, sealed here, opened only in the enclave
+  const cred = brain.credential;
+  const credSelect = el("select", { class: "cred-provider" }, el("option", { value: "anthropic" }, "Anthropic API key"), el("option", { value: "gateway" }, "Inference gateway key (OpenAI-compatible)"));
+  const credKey = textField({ label: "API key", type: "password", placeholder: "sk-…", mono: true, tip: TIPS.credential });
+  const credUrl = textField({ label: "Gateway base URL (optional)", placeholder: "https://…/v1", mono: true, tip: TIPS.credentialHost });
+  credUrl.el.style.display = "none";
+  credSelect.addEventListener("change", () => { credUrl.el.style.display = credSelect.value === "gateway" ? "" : "none"; });
+  const credStatus = !state.cfg.credentials ? el("span", { class: "muted" }, "no Credentials contract on this chain")
+    : !cred || cred.version === 0 ? badge("none: the enclave pays for inference and charges the runtime fee", "muted")
+    : cred.active ? badge(`your key · v${cred.version} · published ${fmt.when(cred.publishedAt)}`, "good")
+    : cred.revoked ? badge(`revoked (v${cred.version})`, "muted")
+    : badge("a previous owner's key: retired by the sale", "muted");
+  const credPanel = state.cfg.credentials && sealed ? el("div", { class: "cred-panel" },
+    el("h5", {}, "Your own inference key ", tip(TIPS.credential)),
+    kv([["Inference credential", credStatus]]),
+    el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, "Provider"), credSelect), credKey.el, credUrl.el,
+      el("button", { class: "btn", onclick: async () => {
+        try {
+          const apiKey = credKey.value(); if (!apiKey || apiKey.length < 8) return toast("Paste the API key first.", "err");
+          if (!state.cfg.enclavePublicKey) throw new Error("No enclave public key is configured for this chain (Developer tab).");
+          if (!(await canSeal())) throw new Error("This browser cannot do X25519 in WebCrypto.");
+          const provider = credSelect.value;
+          const baseUrl = provider === "gateway" ? credUrl.value() : "";
+          if (baseUrl && !/^https?:\/\//.test(baseUrl)) return toast("The gateway URL must start with https://", "err");
+          const payload = { kind: "inference", provider, apiKey, ...(baseUrl ? { baseUrl } : {}) };
+          const env = await sealedCredential(payload, { chainId: state.chainId, tokenId: brain.id }, state.cfg.enclavePublicKey);
+          credKey.input.value = "";
+          await run("Publish your inference key", act.publishCredential(brain.id, "inference", env), refresh,
+            el("p", {}, "Sealed in this tab to the enclave key; only the ciphertext goes on-chain. The enclave switches this brain to your key on its next pass."));
+        } catch (e) { toast(act.explain(e), "err"); }
+      } }, cred && cred.active ? "Replace key" : "Seal and publish"),
+      cred && cred.active ? el("button", { class: "btn", onclick: () => run("Revoke your inference key", act.revokeCredential(brain.id, "inference"), refresh) }, "Revoke") : null)) : null;
+
   const execField = textField({ label: "Executor key (advanced)", value: brain.policy.executor === ZERO ? "" : brain.policy.executor, placeholder: "0x…", mono: true, tip: TIPS.executor });
   const jarInput = el("input", { type: "file", accept: ".json,application/json", class: "jarfile", title: TIPS.jar });
   const runtimePanel = mk("Runtime",
@@ -95,10 +132,15 @@ async function manage(brain, refresh) {
       ["Runtime fee", `${fmt.amt(brain.runtimeFee || 0n, 18, 4)} mUSDC per trade (cap ${fmt.amt(brain.maxRuntimeFee || 0n)}) · at most ${fmt.amt(brain.maxDailyRuntimeFee || 0n, 18, 4)} mUSDC a day${brain.feesGated ? " · paid only while the executor is attested" : ""}${brain.minFeeNotionalBps ? ` · no fee on trades under ${fmt.bps(brain.minFeeNotionalBps)} of NAV` : ""}`, TIPS.fee],
       brain.pendingRuntimeFee && brain.pendingRuntimeFee.effectiveAt && brain.pendingRuntimeFee.effectiveAt > now ? ["Fee raise scheduled", `${fmt.amt(brain.pendingRuntimeFee.fee, 18, 4)} mUSDC per trade, in effect in about ${fmt.duration(brain.pendingRuntimeFee.effectiveAt - now)}`] : null,
       brain.runtimeFeePayments ? ["Runtime fees paid", `${fmt.amt(brain.runtimeFeesPaid || 0n, 18, 4)} mUSDC over ${brain.runtimeFeePayments} trade${brain.runtimeFeePayments === 1 ? "" : "s"}`, "From the traded book to the executor, on-chain (RuntimeFeePaid events)."] : null,
+      (brain.runtimeEscrow || 0n) > 0n ? ["Escrowed rent", `${fmt.amt(brain.runtimeEscrow, 18, 4)} mUSDC prepaid with the guard`, "The backstop for the runtime fee: drawn per trade only when the traded book cannot pay, withdrawable by the owner, refunded if the brain is reaped."] : null,
     ]),
     el("div", { class: "inline-form" }, feeField.el, el("button", { class: "btn", onclick: async () => { try { await run("Runtime fee", act.setRuntimeFee(brain.id, feeField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Set fee")),
+    el("div", { class: "inline-form" }, escrowField.el,
+      el("button", { class: "btn", onclick: async () => { try { await run("Escrow rent", await act.fundRuntimeEscrow(brain, escrowField.value()), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Escrow"),
+      (brain.runtimeEscrow || 0n) > 0n ? el("button", { class: "btn", onclick: async () => { try { await run("Take rent back", act.withdrawRuntimeEscrow(brain, escrowField.value() || formatUnits(brain.runtimeEscrow, 18)), refresh); } catch (e) { toast(act.explain(e), "err"); } } }, "Withdraw") : null),
     brain.runtimeFeeDelay ? el("p", { class: "muted small" }, `A raise takes effect ${fmt.duration(brain.runtimeFeeDelay)} after you set it (depositors are told); lowering is immediate.`) : null,
     econ,
+    credPanel,
     sealed && !brain.envelopePublished ? el("div", { class: "inline-form" }, el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Publish the sealed jar ", tip(TIPS.jar))), jarInput), el("button", { class: "btn", onclick: async () => {
       const f = jarInput.files && jarInput.files[0]; if (!f) return toast("Choose the .sealed.json file first.", "err");
       const text = await f.text();
@@ -190,7 +232,7 @@ async function manage(brain, refresh) {
     } }, `Toggle ${h.sym}`))));
 
   // fees + sell
-  const toField = textField({ label: "Transfer to (sell them whole)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it. Sweep first to sell without capital.", tip: TIPS.transfer });
+  const toField = textField({ label: "Transfer to (sell them whole)", placeholder: "0x…", mono: true, hint: "Whatever is in the brain's wallet goes with it, escrowed rent included. Sweep, and withdraw the escrow, to sell just the legend.", tip: TIPS.transfer });
   const feesPanel = mk("Fees & sale",
     kv([["Fee shares in the jar", `${fmt.amt(brain.fees.feeShares, 18, 4)} shares ≈ ${fmt.usd(brain.fees.feeSharesValue)}`], ["Pending (unminted)", `${fmt.amt(brain.pending.mgmt + brain.pending.perf, 18, 4)} shares`], ["Marketplace", state.cfg.marketplace ? el("a", { href: state.cfg.marketplace.replace("{nft}", state.cfg.traderNFT).replace("{id}", String(brain.id)), target: "_blank", rel: "noopener" }, "list or view it") : el("span", { class: "muted" }, "the token has on-chain metadata (name, traits, jar image); any ERC-721 marketplace renders it — none is configured for this chain")]]),
     el("div", { class: "btn-row" },

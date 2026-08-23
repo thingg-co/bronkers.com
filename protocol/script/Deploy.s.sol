@@ -15,7 +15,11 @@ import {MockAggregator} from "../src/mocks/MockAggregator.sol";
 import {MockOysterMarket} from "../src/mocks/MockOysterMarket.sol";
 import {RuntimeRegistry} from "../src/RuntimeRegistry.sol";
 import {AutomataDcapTdxVerifier, IAutomataDcapAttestation} from "../src/AutomataDcapTdxVerifier.sol";
-import {IVenue} from "../src/interfaces/ITraderNFT.sol";
+import {NitroAttestationVerifier} from "../src/NitroAttestationVerifier.sol";
+import {QuoteVerifierRouter} from "../src/QuoteVerifierRouter.sol";
+import {Credentials} from "../src/Credentials.sol";
+import {ITraderNFT} from "../src/interfaces/ITraderNFT.sol";
+import {IQuoteVerifier, IVenue} from "../src/interfaces/ITraderNFT.sol";
 
 /// Local/testnet deployment: a paper market. The curated venue is PaperVenue,
 /// which quotes mWETH/mUSDC and mWBTC/mUSDC from USD feeds (ETH_USD_FEED /
@@ -96,8 +100,23 @@ contract Deploy is Script {
         if (dcap != address(0)) {
             uint8 maxTcb = uint8(vm.envOr("DCAP_MAX_TCB", uint256(1)));
             verifier = address(new AutomataDcapTdxVerifier(IAutomataDcapAttestation(dcap), maxTcb));
-            runtimeRegistry.setVerifier(AutomataDcapTdxVerifier(verifier));
         }
+        // Nitro path: an approved attestor key (an off-chain verifier, itself
+        // an enclave) signs compact statements this adapter checks; approve
+        // attestor keys post-deploy (setAttestor). The router lets TDX quotes
+        // and Nitro statements share the registry's one verifier slot.
+        NitroAttestationVerifier nitro = new NitroAttestationVerifier(uint64(vm.envOr("NITRO_MAX_AGE", uint256(3600))));
+        IQuoteVerifier[] memory vs = new IQuoteVerifier[](verifier == address(0) ? 1 : 2);
+        if (verifier != address(0)) vs[0] = IQuoteVerifier(verifier);
+        vs[vs.length - 1] = IQuoteVerifier(address(nitro));
+        QuoteVerifierRouter quoteRouter = new QuoteVerifierRouter(vs);
+        runtimeRegistry.setVerifier(quoteRouter);
+
+        // Owner-supplied credentials (an inference key, say), sealed to the
+        // enclave key and published as events; active only while the publisher
+        // owns the brain. Runtime configuration, so it lives beside the NFT,
+        // not in it. Deployed last so the addresses above stay put.
+        Credentials credentials = new Credentials(ITraderNFT(address(nft)));
 
         vm.stopBroadcast();
 
@@ -114,5 +133,8 @@ contract Deploy is Script {
         console.log("RuntimeReg:   ", address(runtimeRegistry));
         console.log("Market:       ", address(market));
         console.log("DcapVerifier: ", verifier);
+        console.log("NitroVerifier:", address(nitro));
+        console.log("QuoteRouter:  ", address(quoteRouter));
+        console.log("Credentials:  ", address(credentials));
     }
 }

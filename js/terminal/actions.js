@@ -1,8 +1,8 @@
 // Write side. Every on-chain action goes through runSteps(): a small modal
 // that narrates each transaction (approve, then deposit…), shows hashes, and
 // translates reverts into sentences a person can act on.
-import { decodeEventLog, encodeFunctionData, maxUint256, parseUnits, stringToHex } from "https://esm.sh/viem@2.21.19";
-import { erc20Abi, guardAbi, nftAbi, tbaAbi, vaultAbi } from "./abi.js";
+import { decodeEventLog, encodeFunctionData, keccak256, maxUint256, parseUnits, stringToHex, toBytes } from "https://esm.sh/viem@2.21.19";
+import { credentialsAbi, erc20Abi, guardAbi, nftAbi, tbaAbi, vaultAbi } from "./abi.js";
 import { explorerTx, state } from "./chain.js";
 import { invalidate } from "./data.js";
 import { celebrate, el, modal, toast } from "./ui.js";
@@ -21,6 +21,8 @@ const REVERTS = [
   [/Guard: not reapable/, "This brain isn't reapable: it still holds capital or vault shares, or it hasn't been dead long enough. Reaping only ever burns an empty, abandoned brain."],
   [/Vault: retired/, "This brain has been reaped; its vault is closed."],
   [/Trader: same genome/, "That is the genome the brain already has."],
+  [/Credentials: not owner/, "Only the brain's owner can publish or revoke its credentials."],
+  [/Credentials: nothing to revoke/, "There is no active credential of that kind to revoke."],
   [/ERC20InsufficientAllowance|insufficient allowance/i, "The token approval is too small. Approve first."],
   [/ERC20InsufficientBalance|transfer amount exceeds balance|insufficient balance/i, "Not enough balance for that amount."],
   [/ERC4626ExceededMaxWithdraw|ERC4626ExceededMaxRedeem/, "That is more than your position in this vault."],
@@ -190,6 +192,20 @@ export function publishEnvelope(id, envelopeObj) {
   const bytes = stringToHex(typeof envelopeObj === "string" ? envelopeObj : JSON.stringify(envelopeObj));
   return [{ label: "Publish the sealed jar on-chain", run: () => tx({ address: state.cfg.traderNFT, abi: nftAbi, functionName: "publishEnvelope", args: [BigInt(id), bytes] }) }];
 }
+/** Credential kinds are keccak256 of a short name; the farm knows "inference". */
+export const credentialKind = (name) => keccak256(toBytes(name));
+
+/** Publish a credential the owner sealed in this tab (Credentials.publish); the farm picks it up on its next pass. */
+export function publishCredential(id, kindName, envelopeObj) {
+  if (!state.cfg.credentials) throw new Error("No Credentials contract is configured for this chain (Developer tab).");
+  const bytes = stringToHex(JSON.stringify(envelopeObj));
+  return [{ label: `Publish the sealed ${kindName} credential on-chain`, run: () => tx({ address: state.cfg.credentials, abi: credentialsAbi, functionName: "publish", args: [BigInt(id), credentialKind(kindName), bytes] }) }];
+}
+export function revokeCredential(id, kindName) {
+  if (!state.cfg.credentials) throw new Error("No Credentials contract is configured for this chain (Developer tab).");
+  return [{ label: `Revoke the ${kindName} credential`, run: () => tx({ address: state.cfg.credentials, abi: credentialsAbi, functionName: "revoke", args: [BigInt(id), credentialKind(kindName)] }) }];
+}
+
 export const setPolicy = (id, notionalBps, slippageBps, interval) => [{ label: `Update trading limits`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setPolicy", args: [BigInt(id), notionalBps, slippageBps, BigInt(interval)] }) }];
 export const setTokenAllowed = (id, token, allowed) => [{ label: `${allowed ? "Enable" : "Disable"} a market`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "setTokenAllowed", args: [BigInt(id), token, allowed] }) }];
 export const setAllowlistEnabled = (brain, enabled) => [{ label: enabled ? "Close the vault to the allowlist" : "Open the vault to anyone", run: () => tx({ address: brain.vault, abi: vaultAbi, functionName: "setAllowlistEnabled", args: [enabled] }) }];
@@ -218,6 +234,20 @@ export function redeemFeeShares(brain) {
 }
 
 // ---- testnet ----
+
+export async function fundRuntimeEscrow(brain, amountStr) {
+  const amount = parseUnits(amountStr || "0", 18);
+  if (amount <= 0n) throw new Error("Enter an amount.");
+  const steps = [await allowanceStep(state.cfg.usdc, state.cfg.guard, amount, "Approve the guard to take your mUSDC")].filter(Boolean);
+  steps.push({ label: `Escrow ${amountStr} mUSDC of rent for ${brain.label}`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "fundRuntime", args: [BigInt(brain.id), amount] }) });
+  return steps;
+}
+
+export function withdrawRuntimeEscrow(brain, amountStr) {
+  const amount = parseUnits(amountStr || "0", 18);
+  if (amount <= 0n) throw new Error("Enter an amount.");
+  return [{ label: `Take ${amountStr} mUSDC of escrowed rent back from ${brain.label}`, run: () => tx({ address: state.cfg.guard, abi: guardAbi, functionName: "withdrawRuntime", args: [BigInt(brain.id), amount] }) }];
+}
 
 export function faucet(amountStr = "10000") {
   const amt = parseUnits(amountStr, 18);

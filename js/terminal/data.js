@@ -1,7 +1,7 @@
 // Read side. Everything the Terminal shows is computed here from public
 // chain state and logs — no indexer. Anyone can recompute these numbers.
-import { formatUnits } from "https://esm.sh/viem@2.21.19";
-import { erc20Abi, guardAbi, nftAbi, registryAbi, vaultAbi } from "./abi.js";
+import { formatUnits, keccak256, toBytes } from "https://esm.sh/viem@2.21.19";
+import { credentialsAbi, erc20Abi, guardAbi, nftAbi, registryAbi, vaultAbi } from "./abi.js";
 import { state } from "./chain.js";
 
 const WAD = 10n ** 18n;
@@ -267,7 +267,7 @@ export async function loadBrain(id, { force } = {}) {
       return { token: t, sym, vaultBal, tbaBal };
     }),
   );
-  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI, tradeInterval, nextTradeAt, feeLogs, now, pendingFee, feeDelay, minFeeNotionalBps, feeRegistry, transcriptLogs] = await Promise.all([
+  const [feeSharesValue, trades, envelopeLogs, runtimeFee, maxRuntimeFee, tokenURI, tradeInterval, nextTradeAt, feeLogs, now, pendingFee, feeDelay, minFeeNotionalBps, feeRegistry, transcriptLogs, escrowBal] = await Promise.all([
     read(b.vault, vaultAbi, "convertToAssets", [feeShares]),
     loadTrades(id, b.genome.birthBlock),
     state.pub.getContractEvents({ address: state.cfg.traderNFT, abi: nftAbi, eventName: "EnvelopePublished", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
@@ -285,7 +285,16 @@ export async function loadBrain(id, { force } = {}) {
     read(guard, guardAbi, "registry").catch(() => "0x0000000000000000000000000000000000000000"),
     // the hash of the inference transcript behind each trade, when the runtime committed one
     state.pub.getContractEvents({ address: guard, abi: guardAbi, eventName: "TranscriptCommitted", args: { tokenId: BigInt(id) }, fromBlock: BigInt(b.genome.birthBlock || 0), toBlock: "latest" }).catch(() => []),
+    read(guard, guardAbi, "runtimeEscrowOf", [BigInt(id)]).catch(() => 0n),
   ]);
+  // the owner's inference credential, if the chain has the Credentials contract: who published it and whether it is still theirs
+  let credential = null;
+  if (state.cfg.credentials) {
+    try {
+      const [publisher, version, publishedAt, revoked, active] = await read(state.cfg.credentials, credentialsAbi, "credentialOf", [BigInt(id), keccak256(toBytes("inference"))]);
+      credential = { publisher, version: Number(version), publishedAt: Number(publishedAt), revoked, active, mine: me ? publisher.toLowerCase() === me.toLowerCase() : false };
+    } catch {}
+  }
   const transcriptByTx = new Map(transcriptLogs.map((l) => [l.transactionHash, l.args.transcript]));
   for (const t of trades) t.transcript = transcriptByTx.get(t.hash) || null;
   // generations: every trade belongs to the generation that was current at its block
@@ -348,6 +357,8 @@ export async function loadBrain(id, { force } = {}) {
     revisions,
     runtimeFeesPaid: feeLogs.reduce((s, l) => s + (l.args.fee ?? 0n), 0n),
     runtimeFeePayments: feeLogs.length,
+    runtimeEscrow: escrowBal,
+    credential,
     token,
     my: { shares: b.myShares, assets: myAssets, usdc: myUsdc, allowance: myAllowance },
     trades,

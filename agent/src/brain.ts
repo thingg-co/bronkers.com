@@ -18,6 +18,8 @@ export interface Usage {
   outputTokens: number;
   model: string;
   backend: "anthropic" | "gateway" | "mock";
+  /** who is billed for these tokens: the operator (default) or the owner, through a credential they published */
+  paidBy?: "operator" | "owner";
 }
 
 export interface Decision {
@@ -62,11 +64,15 @@ function userPrompt(snapshot: MarketSnapshot): string {
 
 /** The real brain against Anthropic's API: the decrypted genome is the system prompt. */
 export class ClaudeBrain implements Brain {
-  private client = new Anthropic();
+  private client: Anthropic;
   constructor(
     private genome: Genome,
     private model: string,
-  ) {}
+    /** the owner's key (and optional base URL), if they published one; the operator's env otherwise */
+    private owned?: { apiKey: string; baseUrl?: string },
+  ) {
+    this.client = owned ? new Anthropic({ apiKey: owned.apiKey, ...(owned.baseUrl ? { baseURL: owned.baseUrl } : {}) }) : new Anthropic();
+  }
 
   async decide(snapshot: MarketSnapshot): Promise<Decision> {
     const res = await this.client.messages.create({
@@ -81,7 +87,7 @@ export class ClaudeBrain implements Brain {
     if (!toolUse || toolUse.type !== "tool_use") throw new Error("Brain returned no trade intent");
     return {
       intent: TradeIntent.parse(toolUse.input),
-      usage: { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens, model: res.model ?? this.model, backend: "anthropic" },
+      usage: { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens, model: res.model ?? this.model, backend: "anthropic", paidBy: this.owned ? "owner" : "operator" },
     };
   }
 }
@@ -94,12 +100,15 @@ export class ClaudeBrain implements Brain {
  * (…/v1), INFERENCE_API_KEY. The on-chain model trait names the model.
  */
 export class GatewayBrain implements Brain {
+  private baseUrl: string;
   constructor(
     private genome: Genome,
     private model: string,
-    private baseUrl = (process.env.INFERENCE_BASE_URL ?? "").replace(/\/$/, ""),
+    baseUrl = (process.env.INFERENCE_BASE_URL ?? ""),
     private apiKey = process.env.INFERENCE_API_KEY ?? "",
+    private paidBy: "operator" | "owner" = "operator",
   ) {
+    this.baseUrl = baseUrl.replace(/\/$/, "");
     if (!this.baseUrl) throw new Error("GatewayBrain needs INFERENCE_BASE_URL");
   }
 
@@ -133,6 +142,7 @@ export class GatewayBrain implements Brain {
         outputTokens: json.usage?.completion_tokens ?? 0,
         model: json.model ?? this.model,
         backend: "gateway",
+        paidBy: this.paidBy,
       },
     };
   }
@@ -158,15 +168,32 @@ export class MockBrain implements Brain {
   }
 }
 
-/** Backend selection: --mock-brain, else a TEE gateway if INFERENCE_BASE_URL is set, else Anthropic. */
-export function createBrain(opts: { genome: Genome; model: string; mock?: boolean }): Brain {
+/** An owner's own inference account, already validated by credentials.ts checkInference(). */
+export interface OwnedInference {
+  provider: "anthropic" | "gateway";
+  apiKey: string;
+  baseUrl?: string;
+}
+
+/**
+ * Backend selection: --mock-brain; else the owner's key if they published one
+ * (their account is billed, the farm's ledger prices those tokens at zero);
+ * else a TEE gateway if INFERENCE_BASE_URL is set; else Anthropic.
+ */
+export function createBrain(opts: { genome: Genome; model: string; mock?: boolean; inference?: OwnedInference | null }): Brain {
   if (opts.mock) return new MockBrain();
+  const own = opts.inference;
+  if (own) {
+    if (own.provider === "gateway") return new GatewayBrain(opts.genome, opts.model, own.baseUrl, own.apiKey, "owner");
+    return new ClaudeBrain(opts.genome, opts.model, { apiKey: own.apiKey, baseUrl: own.baseUrl });
+  }
   if (process.env.INFERENCE_BASE_URL) return new GatewayBrain(opts.genome, opts.model);
   return new ClaudeBrain(opts.genome, opts.model);
 }
 
-export function describeBackend(mock?: boolean): string {
+export function describeBackend(mock?: boolean, inference?: OwnedInference | null): string {
   if (mock) return "mock brain";
+  if (inference) return inference.provider === "gateway" ? `owner's key at ${inference.baseUrl}` : "owner's Anthropic key";
   if (process.env.INFERENCE_BASE_URL) return `inference gateway ${process.env.INFERENCE_BASE_URL}`;
   return "Anthropic API";
 }

@@ -30,6 +30,15 @@ export const nftAbi = parseAbi([
   "event Reaped(uint256 indexed tokenId)",
 ]);
 
+export const credentialsAbi = parseAbi([
+  "function publish(uint256,bytes32,bytes)",
+  "function revoke(uint256,bytes32)",
+  "function credentialOf(uint256,bytes32) view returns (address publisher, uint32 version, uint64 publishedAt, bool revoked, bool active)",
+  "function active(uint256,bytes32) view returns (bool)",
+  "event CredentialPublished(uint256 indexed tokenId, bytes32 indexed kind, address indexed publisher, uint32 version, bytes envelope)",
+  "event CredentialRevoked(uint256 indexed tokenId, bytes32 indexed kind, uint32 version)",
+]);
+
 export const guardAbi = parseAbi([
   "function policyOf(uint256) view returns (address executor, uint16 maxNotionalBps, uint16 maxSlippageBps, uint64 minTradeInterval, uint64 lastTradeAt, address valuationRouter)",
   "function tierOf(uint256) view returns (uint8)",
@@ -49,6 +58,9 @@ export const guardAbi = parseAbi([
   "function runtimeFeeOf(uint256) view returns (uint256)",
   "function maxRuntimeFee() view returns (uint256)",
   "function setRuntimeFee(uint256,uint256)",
+  "function runtimeEscrowOf(uint256) view returns (uint256)",
+  "function fundRuntime(uint256,uint256)",
+  "function withdrawRuntime(uint256,uint256)",
   "function pendingRuntimeFeeOf(uint256) view returns (uint256 fee, uint64 effectiveAt)",
   "function runtimeFeeDelay() view returns (uint64)",
   "function minFeeNotionalBps() view returns (uint16)",

@@ -251,6 +251,10 @@
                             <td>An owner can revise a brain into a new generation (<code>revise</code>), committed before it trades. The guard keeps it in training camp: own-book trades only until it has sparred the minimum and the notice period has passed; every trade stays attributed to the generation that made it; the high-water mark carries, so revising never resets fees. Sealed brains are coached inside the jar.</td>
                         </tr>
                         <tr>
+                            <td>"Bring your own brain juice."</td>
+                            <td>An owner can put their brain on their own API key: the key is sealed in the browser to the enclave key (<code>Credentials.publish</code>, a separate HKDF domain from the genome, bound to this brain on this chain), opened only inside the enclave, and <code>active</code> only while the publisher still owns the brain, so a sale retires it by itself. The enclave sends it only to allowlisted inference hosts; a key, never an endpoint, so the sealed prompt can't leak through the URL.</td>
+                        </tr>
+                        <tr>
                             <td>"Harvesters get paid to run brains."</td>
                             <td>Anyone can run a farm; the owner picks one by setting its key as executor. The fee is paid only to an executor the <code>RuntimeRegistry</code> marks attested, only on trades of at least 1% of NAV, raises take effect after a notice period, and each trade carries the hash of the inference transcript behind it (<code>TranscriptCommitted</code>). Paid for evidence.</td>
                         </tr>

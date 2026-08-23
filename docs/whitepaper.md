@@ -388,6 +388,23 @@ interface as to a conventional model API. No card, no subscription, and no opera
 account stands between a brain's capital and the compute that runs it. The owner's only
 actions remain minting, funding, enrolling, and setting the fee.
 
+An owner who would rather pay for inference directly may supply a credential of their
+own. The credential is sealed in the owner's browser to the enclave key, under a key
+derivation domain separate from the genome's so that neither envelope can be opened as
+the other, with the chain, token, and purpose bound into the plaintext, and it is
+published through a small contract (`Credentials`) as an event in the same way as the
+genome envelope. The contract records only who published the current version and
+whether it has been revoked; a credential is usable only while its publisher still owns
+the brain, so a sale retires the seller's credential without any action on their part,
+and the buyer publishes their own. The enclave opens the credential in process, uses it
+for the one purpose it names, and prices the resulting tokens at zero in the brain's
+account. Two restrictions keep the arrangement inside the custody model. The enclave
+sends an owner's key only to hosts the operator has allowed (the model provider and
+attested inference gateways), never to an endpoint of the owner's choosing, since the
+sealed prompt accompanies every request; and the plaintext credential is held only in
+memory with the running brain and is never logged, written, or included in a
+transcript.
+
 ## 7. Verifiability of the Record
 
 Every execution emits a `TradeExecuted` event carrying the agent identifier, venue,

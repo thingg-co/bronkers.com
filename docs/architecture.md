@@ -223,6 +223,21 @@ the measurement. `Deploy.s.sol` wires it when `DCAP_ATTESTATION` is set;
 `deploy-testnet.sh` sets it where the entrypoint exists. Tests drive both the registry
 (mock verifier) and the adapter's parsing (mock entrypoint, synthetic output).
 
+### 2.2c Credentials.sol
+
+Owner-supplied secrets for a brain, kept out of `TraderNFT` (near the size limit) and
+out of the guard (it is runtime configuration, not policy). `publish(tokenId, kind,
+envelope)` is owner-only and emits `CredentialPublished(tokenId, kind, publisher,
+version, envelope)`; `revoke(tokenId, kind)` emits `CredentialRevoked`. Storage holds
+only `(publisher, version, publishedAt, revoked)` per `(tokenId, kind)`; the envelope
+lives in the log like the genome's. `credentialOf` / `active` report whether the
+runtime may use it: published, not revoked, and **publisher == ownerOf(tokenId)**, so a
+sale retires the seller's credential without a transfer hook and the buyer publishes
+their own. `kind` is `keccak256` of a short name; the farm understands `inference`
+(the owner's Anthropic or gateway API key). The envelope is ECIES to the enclave key
+under HKDF info `brokners-credentials-v1`, domain-separated from the genome, with the
+plaintext bound to `{chainId, tokenId, kind}`. Tests: `Credentials.t.sol`.
+
 ### 2.3 TraderVault.sol (ERC-4626 clone per trader)
 
 - Base asset: mock USDC (prototype). Standard `deposit/withdraw/mint/redeem`.
@@ -253,6 +268,7 @@ the measurement. `Deploy.s.sol` wires it when `DCAP_ATTESTATION` is set;
 | `deposit` (if allowlisted) / `withdraw` | | ✔ | | |
 | `executeTrade` | | | ✔ | |
 | `setExecutor`, `setPolicy`, `setRuntimeFee` | | | | ✔ |
+| `Credentials.publish` / `revoke` | | | | ✔ |
 | sweep TBA (sell-without-capital) | | | | ✔ |
 | `checkpoint()` | ✔ | | | |
 | read genome, traits, history | ✔ | | | |
@@ -368,7 +384,17 @@ commitment. `POST /train {tokenId, brief}` coaches a sealed brain in-enclave
 (`composeRevision`: the note is appended to the current prompt and the revision list kept
 in the tweaks) and returns `{commitment, envelope, generation}`. No protocol state of its
 own: it resumes from `policyOf.lastTradeAt`. Authored brains are skipped (self-hosted via `npm
-run loop`). Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
+run loop`). With `CREDENTIALS_ADDRESS` set the farm also reads each brain's `inference`
+credential (`agent/src/credentials.ts`): the latest `CredentialPublished` whose version
+matches `credentialOf` and is `active`, opened under the credentials domain, checked for
+its `{chainId, tokenId, kind}` binding and against the operator's host policy
+(`checkInference`: Anthropic, the farm's own `INFERENCE_BASE_URL`, and
+`FARM_INFERENCE_HOSTS`; https only; an arbitrary endpoint is refused because the sealed
+prompt would travel with the request). The brain is then built on the owner's key
+(`createBrain({inference})`), its usage is marked `paidBy: "owner"` and priced at zero in
+the ledger, and the farm rebuilds the brain whenever the credential's version or activity
+changes (publish, revoke, sale). The plaintext is held in memory with the running brain
+and never logged, written, or put in a transcript. Flags `--once`, `--mock-brain`, `--dry-run`, `--measure`;
 `FARM_POLL_SECONDS`, `FARM_MIN_FEE` (refuse brains paying less), `FARM_HTTP_PORT` (the
 enclave endpoint: `GET /health`, `GET /ledger[?tokenId=]`, `POST /compose {brief,
 tweaks}` → `{commitment, envelope}` for sealed-generated brains; the prompt never leaves
@@ -454,6 +480,8 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Fee raised on depositors without notice | raises take effect after `runtimeFeeDelay`; lowering is immediate | same, with a longer period |
 | Strategy swapped under depositors' money | a revision is committed before it trades, spars `campMinTrades` own-book trades and waits `revisionNotice` before the vault; trades stay attributed to their generation; HWM carries | same, longer notice |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
+| Seller's API key spent on the buyer's brain, or buyer's brain leaking to the seller's account | a credential is active only while `publisher == ownerOf`; the farm rebuilds on change | same |
+| Owner exfiltrates the sealed prompt through a bring-your-own inference endpoint | owner may bring a key, not an endpoint: hosts allowlisted by the operator, https only | same, allowlist = attested TEE gateways |
 | NFT deposited into own TBA (ownership cycle) | blocked: TBA cannot receive its own collection | same |
 | Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
 | Operator runs brains at a loss and stops | per-brain credit; paused brains are told the covering fee; lease topped up from fees | same, with the lease on a market a bare key pays |

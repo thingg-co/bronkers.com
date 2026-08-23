@@ -106,6 +106,14 @@ contract ExecutionGuard is ReentrancyGuard {
     /// NAV pays no fee (dust cannot be churned for fees); and a fee raise takes
     /// effect only after runtimeFeeDelay, so depositors see it coming. Lowering
     /// is immediate.
+    ///
+    /// Escrowed rent: anyone may prepay a brain's fees (fundRuntime). When the
+    /// traded book cannot cover the fee it is drawn from escrow instead, under
+    /// exactly the same gates and per-day bound, so a thin book keeps its
+    /// harvester paid instead of running up credit with it. Escrow is operating
+    /// prepayment, not capital: it counts toward no NAV, saves no brain from
+    /// reaping, travels with the token (withdraw before selling), and is
+    /// refunded to the owner when a brain is reaped or culled.
     uint256 public maxRuntimeFee;
     address public registry; // IRuntimeRegistry; zero = fees are not gated on attestation
     uint16 public minFeeNotionalBps = 100; // a trade must move at least 1% of NAV to pay a fee
@@ -118,6 +126,7 @@ contract ExecutionGuard is ReentrancyGuard {
 
     mapping(uint256 => uint256) private _runtimeFee;
     mapping(uint256 => PendingFee) public pendingRuntimeFeeOf;
+    mapping(uint256 => uint256) public runtimeEscrowOf; // prepaid rent, in base asset, held by this contract
 
     event TradeExecuted(
         uint256 indexed tokenId,
@@ -142,6 +151,10 @@ contract ExecutionGuard is ReentrancyGuard {
     event RuntimeFeeScheduled(uint256 indexed tokenId, uint256 fee, uint64 effectiveAt);
     event MaxRuntimeFeeSet(uint256 fee);
     event RuntimeFeePaid(uint256 indexed tokenId, address indexed executor, uint256 fee);
+    event RuntimeEscrowFunded(uint256 indexed tokenId, address indexed from, uint256 amount);
+    event RuntimeEscrowWithdrawn(uint256 indexed tokenId, address indexed to, uint256 amount);
+    event RuntimeEscrowDraw(uint256 indexed tokenId, uint256 fee);
+    event RuntimeEscrowRefunded(uint256 indexed tokenId, address indexed to, uint256 amount);
     event RegistrySet(address registry);
     event MinFeeNotionalSet(uint16 bps);
     event RuntimeFeeDelaySet(uint64 delay);
@@ -248,6 +261,24 @@ contract ExecutionGuard is ReentrancyGuard {
             pendingRuntimeFeeOf[tokenId] = PendingFee(fee, effectiveAt);
             emit RuntimeFeeScheduled(tokenId, fee, effectiveAt);
         }
+    }
+
+    /// @notice Prepay a brain's rent. Anyone may fund; the balance belongs to
+    /// the token, so a buyer inherits what is left (withdraw before selling).
+    function fundRuntime(uint256 tokenId, uint256 amount) external nonReentrant {
+        nft.ownerOf(tokenId); // reverts for a burned or never-minted id
+        require(amount > 0, "Guard: zero amount");
+        IERC20(baseAsset).safeTransferFrom(msg.sender, address(this), amount);
+        runtimeEscrowOf[tokenId] += amount;
+        emit RuntimeEscrowFunded(tokenId, msg.sender, amount);
+    }
+
+    /// @notice Take escrowed rent back out (current owner only).
+    function withdrawRuntime(uint256 tokenId, uint256 amount) external nonReentrant onlyTraderOwner(tokenId) {
+        require(amount > 0 && amount <= runtimeEscrowOf[tokenId], "Guard: escrow balance");
+        runtimeEscrowOf[tokenId] -= amount;
+        IERC20(baseAsset).safeTransfer(msg.sender, amount);
+        emit RuntimeEscrowWithdrawn(tokenId, msg.sender, amount);
     }
 
     /// @notice Upgrade a brain's seat. Upgrades only, one-time fee per jump,
@@ -420,15 +451,22 @@ contract ExecutionGuard is ReentrancyGuard {
 
         // best-effort runtime reimbursement, after the swap so it never
         // competes with the trade itself for the source's base balance; only
-        // to an attested executor, only for a trade that moved real size
+        // to an attested executor, only for a trade that moved real size. The
+        // book pays first; escrowed rent is the backstop when it cannot.
         uint256 fee = runtimeFeeOf(tokenId);
         if (
             fee > 0 && fee <= maxRuntimeFee && notional >= (nav * minFeeNotionalBps) / 10_000
                 && (registry == address(0) || IRuntimeRegistry(registry).attested(msg.sender))
-                && IERC20(baseAsset).balanceOf(source) >= fee
         ) {
-            IERC20(baseAsset).safeTransferFrom(source, msg.sender, fee);
-            emit RuntimeFeePaid(tokenId, msg.sender, fee);
+            if (IERC20(baseAsset).balanceOf(source) >= fee) {
+                IERC20(baseAsset).safeTransferFrom(source, msg.sender, fee);
+                emit RuntimeFeePaid(tokenId, msg.sender, fee);
+            } else if (runtimeEscrowOf[tokenId] >= fee) {
+                runtimeEscrowOf[tokenId] -= fee;
+                IERC20(baseAsset).safeTransfer(msg.sender, fee);
+                emit RuntimeEscrowDraw(tokenId, fee);
+                emit RuntimeFeePaid(tokenId, msg.sender, fee);
+            }
         }
     }
 
@@ -490,7 +528,9 @@ contract ExecutionGuard is ReentrancyGuard {
     /// @notice Is this brain dead? No vault shares outstanding (no LP or
     /// unredeemed fee shares) and NAV at or below dust. A brain with any shares
     /// or real capital is never dead, so reaping can never strand a depositor
-    /// or destroy an owner's unredeemed fees or swept capital.
+    /// or destroy an owner's unredeemed fees or swept capital. Escrowed rent is
+    /// prepaid opex, not capital: it neither counts toward NAV nor saves a
+    /// brain from reaping — it is refunded to the owner when the brain burns.
     function insolvent(uint256 tokenId) public view returns (bool) {
         TraderVault vault = TraderVault(nft.vaultOf(tokenId));
         if (vault.totalSupply() > 0) return false;
@@ -514,9 +554,20 @@ contract ExecutionGuard is ReentrancyGuard {
         return last + reapDelay;
     }
 
+    /// @dev Any escrowed rent goes back to the owner losing the brain.
+    function _refundEscrow(uint256 tokenId) internal {
+        uint256 bal = runtimeEscrowOf[tokenId];
+        if (bal == 0) return;
+        address to = nft.ownerOf(tokenId);
+        runtimeEscrowOf[tokenId] = 0;
+        IERC20(baseAsset).safeTransfer(to, bal);
+        emit RuntimeEscrowRefunded(tokenId, to, bal);
+    }
+
     /// @notice Reap a dead brain: free (anyone), burns it, frees a slot.
     function reap(uint256 tokenId) external nonReentrant {
         require(reapable(tokenId), "Guard: not reapable");
+        _refundEscrow(tokenId);
         nft.reapBurn(tokenId);
         emit Reaped(tokenId, msg.sender);
     }
@@ -538,6 +589,7 @@ contract ExecutionGuard is ReentrancyGuard {
     ) external nonReentrant returns (uint256 newTokenId) {
         require(reapable(deadTokenId), "Guard: not reapable");
         if (cullFee > 0) IERC20(baseAsset).safeTransferFrom(msg.sender, treasury, cullFee);
+        _refundEscrow(deadTokenId);
         nft.reapBurn(deadTokenId);
         newTokenId =
             nft.mintFor(msg.sender, commitment, riskProfile, cadence, custody, model, encryptedPromptCID, universe, managementFeeBps, performanceFeeBps);

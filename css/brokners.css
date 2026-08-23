@@ -1382,6 +1382,10 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
 .doc-fallback { color: var(--text-secondary); }
 
 
+/* My Desk: the owner's own inference key, a sub-panel of Runtime */
+.cred-panel { margin-top: var(--space-sm); padding-top: var(--space-sm); border-top: 1px solid var(--border-subtle); }
+.cred-panel h5 { margin: 0 0 var(--space-xs); }
+
 /* 9. Motion ------------------------------------------------------------------ */
 
 @keyframes ticker-scroll {

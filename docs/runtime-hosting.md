@@ -127,6 +127,12 @@ picked up there.
    chat completions with a forced tool call, `INFERENCE_BASE_URL` /
    `INFERENCE_API_KEY`, usage priced by `INFERENCE_PRICE_IN/OUT`. Selected
    automatically when the URL is set; the on-chain model trait names the model.
+   Owners may also bring their own key: a sealed `inference` credential
+   published through `Credentials` (set `CREDENTIALS_ADDRESS`) puts the brain on
+   the owner's Anthropic or gateway account; the farm prices those tokens at
+   zero. `FARM_INFERENCE_HOSTS` lists extra gateway hosts an owner's key may be
+   sent to (Anthropic and `INFERENCE_BASE_URL` are always allowed); anything
+   else is refused, since the sealed prompt travels with the request.
 3. **Attested registration.** `RuntimeRegistry.registerAttested(quote, enclaveKey)`
    through `IQuoteVerifier`; `AutomataDcapTdxVerifier` wraps Automata's
    entrypoint and reads the TD report (MRTD, RTMRs, report data) out of its

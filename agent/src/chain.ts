@@ -24,6 +24,7 @@ export const config = {
   guard: env("GUARD_ADDRESS") as Address,
   router: env("ROUTER_ADDRESS") as Address,
   registry: (process.env.REGISTRY_ADDRESS ?? "") as Address,
+  credentials: (process.env.CREDENTIALS_ADDRESS ?? "") as Address,
   genomePath: process.env.GENOME_PATH ?? "./genome.local.json",
   genomeKey: process.env.GENOME_KEY ?? "",
 };

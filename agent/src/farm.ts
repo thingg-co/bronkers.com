@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
-import { encodePacked, formatUnits, keccak256, parseUnits, toHex, type Address, type Hex } from "viem";
+import { encodePacked, formatUnits, keccak256, parseUnits, stringToBytes, toHex, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { erc20Abi, guardAbi, registryAbi, traderNftAbi, vaultAbi } from "./abi.js";
-import { createBrain, describeBackend, type Brain } from "./brain.js";
+import { credentialsAbi, erc20Abi, guardAbi, registryAbi, traderNftAbi, vaultAbi } from "./abi.js";
+import { createBrain, describeBackend, type Brain, type OwnedInference } from "./brain.js";
 import { defaultPrices, Ledger } from "./budget.js";
 import { chainId, config, publicClient, snapshot, walletClient, type Book } from "./chain.js";
+import { checkInference, INFERENCE_KIND, openCredential } from "./credentials.js";
 import { composePrompt, composeRevision, enclavePublicKeyOf, seal, type SealedEnvelope, unseal } from "./enclave.js";
 import { execute, prepare } from "./executor.js";
 import { commit, type Genome } from "./genome.js";
@@ -56,6 +57,17 @@ import { buildTranscript, saveTranscript } from "./transcript.js";
  * note, seals the next generation and returns {commitment, envelope}; the
  * owner publishes and revises. No plaintext leaves.
  *
+ * Credentials: an owner may publish a sealed credential for their brain
+ * (Credentials.publish; CREDENTIALS_ADDRESS). The farm opens the "inference"
+ * kind in-process, checks it was sealed for this brain on this chain, and
+ * runs the brain on the owner's own key (Anthropic, or a gateway host on the
+ * operator's allowlist: FARM_INFERENCE_HOSTS, plus Anthropic and
+ * INFERENCE_BASE_URL). Those tokens are priced at zero in the ledger. A
+ * credential is active only while its publisher owns the brain and is not
+ * revoked; the farm re-checks every pass and rebuilds the brain when it
+ * changes. The plaintext is held in memory for the running brain only and
+ * never logged or written.
+ *
  * Enclave endpoint (optional, FARM_HTTP_PORT): GET /health, GET /ledger
  * [?tokenId=], POST /compose {brief, tweaks} -> {commitment, envelope} for
  * sealed-generated brains, POST /train. Prompts are composed and sealed
@@ -71,6 +83,8 @@ import { buildTranscript, saveTranscript } from "./transcript.js";
  *      FARM_HTTP_PORT, REGISTRY_ADDRESS, FARM_QUOTE_PATH, FARM_QUOTE_FEE (native),
  *      FARM_TRANSCRIPTS_DIR (default ./.farm-transcripts; empty to keep none),
  *      INFERENCE_BASE_URL/INFERENCE_API_KEY (TEE gateway instead of Anthropic),
+ *      CREDENTIALS_ADDRESS (owner-supplied keys), FARM_INFERENCE_HOSTS (extra hosts an
+ *      owner's gateway key may be sent to, comma-separated),
  *      FARM_TURBO=1 (dev: tick every poll; trades still wait for the on-chain cadence).
  */
 const args = new Set(process.argv.slice(2));
@@ -141,8 +155,11 @@ interface Running {
   lastTickAt: number; // chain seconds, our last tick (trade or hold)
   birthBlock: bigint;
   commitment: Hex;
+  credentialVersion: number; // the inference credential the brain was built with (0 = none); rebuilt when it changes
+  backend: string; // for logs and /ledger; never the key itself
 }
 const running = new Map<bigint, Running>();
+const INFERENCE_KIND_HASH = keccak256(stringToBytes(INFERENCE_KIND));
 const skipped = new Map<bigint, string>(); // tokenId -> reason, logged once
 const notes = new Map<string, string>(); // farm-level notes, logged once per change
 
@@ -235,6 +252,31 @@ async function latestEnvelope(tokenId: bigint, fromBlock: bigint): Promise<Seale
   return JSON.parse(json) as SealedEnvelope;
 }
 
+/**
+ * The owner's inference credential for a brain, if they published one and it is
+ * still theirs: (version, the validated credential or null, and a reason when
+ * one was published but cannot be used). The version is what enrol() watches.
+ */
+async function loadInference(tokenId: bigint, fromBlock: bigint): Promise<{ version: number; cred: OwnedInference | null; reason: string | null }> {
+  if (!config.credentials) return { version: 0, cred: null, reason: null };
+  const [, version, , revoked, active] = await publicClient.readContract({ address: config.credentials, abi: credentialsAbi, functionName: "credentialOf", args: [tokenId, INFERENCE_KIND_HASH] });
+  if (!active) return { version: 0, cred: null, reason: version > 0 ? (revoked ? "inference credential revoked by the owner" : "inference credential belongs to a previous owner; not used") : null };
+  const logs = await publicClient.getContractEvents({
+    address: config.credentials, abi: credentialsAbi, eventName: "CredentialPublished", args: { tokenId, kind: INFERENCE_KIND_HASH }, fromBlock,
+  });
+  const log = [...logs].reverse().find((l) => Number(l.args.version) === Number(version));
+  if (!log) return { version: Number(version), cred: null, reason: "inference credential is active on-chain but its envelope was not found in the logs" };
+  try {
+    const raw = log.args.envelope as Hex;
+    const env = JSON.parse(Buffer.from(raw.slice(2), "hex").toString("utf8")) as SealedEnvelope;
+    const cred = openCredential(env, enclaveKey, { chainId, tokenId, kind: INFERENCE_KIND });
+    return { version: Number(version), cred: checkInference(cred), reason: null };
+  } catch (e) {
+    // the reason never includes the plaintext
+    return { version: Number(version), cred: null, reason: `inference credential v${version} not usable: ${e instanceof Error ? e.message : e}` };
+  }
+}
+
 /** Fold the runtime fees this brain has paid us (RuntimeFeePaid logs) into the ledger, in chunks public RPCs accept. */
 async function refreshFees(tokenId: bigint, birthBlock: bigint): Promise<void> {
   const a = ledger.account(tokenId);
@@ -280,6 +322,22 @@ async function enrol(): Promise<void> {
       console.log(`${r.label}: revised to generation ${gen}; reopening the jar against the new commitment`);
       running.delete(tokenId);
     }
+    // the owner's inference credential: published, revoked, or retired by a sale since we built the brain
+    let inference: Awaited<ReturnType<typeof loadInference>> | null = null;
+    if (config.credentials) {
+      try {
+        inference = await loadInference(tokenId, BigInt(onChain.birthBlock));
+      } catch (e) {
+        noteOnce(`cred-${tokenId}`, `#${tokenId}: could not read credentials: ${e instanceof Error ? e.message : e}`);
+      }
+      const still = running.get(tokenId);
+      if (inference && still && still.credentialVersion !== (inference.cred ? inference.version : 0)) {
+        console.log(`${still.label}: inference credential changed (${inference.cred ? `v${inference.version}, owner's key` : inference.reason ?? "none"}); rebuilding the brain`);
+        running.delete(tokenId);
+      }
+      if (inference?.reason) noteOnce(`cred-reason-${tokenId}`, `#${tokenId}: ${inference.reason}`);
+      else notes.delete(`cred-reason-${tokenId}`);
+    }
     try {
       await refreshFees(tokenId, BigInt(onChain.birthBlock));
     } catch (e) {
@@ -321,10 +379,13 @@ async function enrol(): Promise<void> {
     const generation = await publicClient.readContract({ address: config.nft, abi: traderNftAbi, functionName: "generationOf", args: [tokenId] });
     const cadence = Math.max(1, onChain.cadence);
     const intervalSec = Math.max(60, Math.floor(86_400 / cadence));
+    const owned = inference?.cred ?? null;
     running.set(tokenId, {
       tokenId,
       label: name ? `${name} (#${tokenId})` : `#${tokenId}`,
-      brain: createBrain({ genome, model: onChain.model, mock: useMock }),
+      brain: createBrain({ genome, model: onChain.model, mock: useMock, inference: owned }),
+      credentialVersion: owned ? inference!.version : 0,
+      backend: describeBackend(useMock, owned),
       cadence,
       intervalSec,
       lastTradeAt: Number(policy[4]),
@@ -333,7 +394,7 @@ async function enrol(): Promise<void> {
       commitment: onChain.commitment,
     });
     skipped.delete(tokenId);
-    console.log(`${running.get(tokenId)!.label}: enrolled · generation ${generation} · cadence ${cadence}/day · fee ${fmtBase(fee)} · genome verified ${onChain.commitment.slice(0, 10)}…`);
+    console.log(`${running.get(tokenId)!.label}: enrolled · generation ${generation} · cadence ${cadence}/day · fee ${fmtBase(fee)} · ${running.get(tokenId)!.backend} · genome verified ${onChain.commitment.slice(0, 10)}…`);
   }
   ledger.save();
 }
@@ -501,7 +562,8 @@ function startHttp(): void {
       if (tokenId) {
         const b = all.brains.find((x) => x.tokenId === String(Number(tokenId)));
         res.writeHead(200, cors);
-        res.end(json({ decimals: all.decimals, grace: all.grace, minFee, brain: b ?? null, running: running.has(BigInt(tokenId)) }));
+        const r = running.get(BigInt(tokenId));
+        res.end(json({ decimals: all.decimals, grace: all.grace, minFee, brain: b ?? null, running: Boolean(r), backend: r?.backend ?? null, ownerPaysInference: Boolean(r && r.credentialVersion > 0) }));
         return;
       }
       res.writeHead(200, cors);

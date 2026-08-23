@@ -65,6 +65,13 @@ export const registryAbi = parseAbi([
   "function verifier() view returns (address)",
 ]);
 
+export const credentialsAbi = parseAbi([
+  "function credentialOf(uint256 tokenId, bytes32 kind) view returns (address publisher, uint32 version, uint64 publishedAt, bool revoked, bool active)",
+  "function active(uint256 tokenId, bytes32 kind) view returns (bool)",
+  "event CredentialPublished(uint256 indexed tokenId, bytes32 indexed kind, address indexed publisher, uint32 version, bytes envelope)",
+  "event CredentialRevoked(uint256 indexed tokenId, bytes32 indexed kind, uint32 version)",
+]);
+
 export const venueAbi = parseAbi([
   "function quote(address tokenIn, address tokenOut, uint256 amountIn) view returns (uint256)",
 ]);

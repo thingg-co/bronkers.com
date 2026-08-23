@@ -178,7 +178,8 @@ export class Ledger {
     if (usage) {
       a.tokensIn += usage.inputTokens;
       a.tokensOut += usage.outputTokens;
-      a.inferenceCost += inferenceToBase(usage, this.cfg.prices(usage.model, usage.backend));
+      // tokens billed to the owner's own key (a published credential) cost the operator nothing
+      if (usage.paidBy !== "owner") a.inferenceCost += inferenceToBase(usage, this.cfg.prices(usage.model, usage.backend));
     }
   }
 
