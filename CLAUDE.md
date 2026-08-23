@@ -17,8 +17,9 @@ session needs to know that the code doesn't say.
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the
    internship, Ring the Bell, "sell them whole", "they pay their own rent"). A
-   Brokner's pronouns are they/them (declared with a joke in the landing hero;
-   "the whole guy" is retired); docs and the paper say "agent".
+   Brokner is "they/them" in copy, without announcing it (the pronoun byline in
+   the hero was cut Aug 2026; "the whole guy" is retired); docs and the paper
+   say "agent".
    Contracts, tests, and docs stay rigorous and deadpan. The "Silly Copy.
    Serious Code." table on index.html maps every meme claim to its enforcing
    invariant — keep it true.
