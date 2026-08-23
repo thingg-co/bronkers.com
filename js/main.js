@@ -31,7 +31,8 @@
     const KEY = 'brokners.alpha.ack';
     let seen = false;
     try { seen = localStorage.getItem(KEY) === '1'; } catch {}
-    if (seen || !document.body) return;
+    // not for automated browsers (crawlers, screenshots): they cannot acknowledge it
+    if (seen || !document.body || navigator.webdriver) return;
     const close = () => {
         try { localStorage.setItem(KEY, '1'); } catch {}
         back.remove();
