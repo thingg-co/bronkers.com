@@ -11,6 +11,24 @@ A research prototype. **Testnet only.** The design is described in
 fake money, the real contracts, so anyone can learn it (the Terminal's Learn
 tab walks through the lifecycle).
 
+## Try it
+
+```bash
+git clone https://github.com/thingg-co/bronkers.com brokners && cd brokners
+(cd protocol && forge install && forge test)       # the invariants, 94 tests
+(cd agent && npm install && npm test)               # the farm's arithmetic, 14 tests
+anvil --silent & protocol/script/seed-dev.sh        # a local chain with three brains and a running farm
+python3 -m http.server 8000                          # then open http://localhost:8000/app.html
+```
+
+Live: [brokners.com](https://brokners.com) (the Terminal reads Polygon Amoy
+with no wallet; bring one on Amoy to mint or deposit). Start with
+[the primer](https://brokners.com/primer), then
+[the paper](https://brokners.com/docs/whitepaper). What is real today and what
+isn't yet is listed on the front page; the short version is that the
+contracts and the sealing are real, the enclave is not yet a hardware enclave,
+the model provider sees the prompt, and NAV is a spot quote.
+
 ## Layout
 
 ```

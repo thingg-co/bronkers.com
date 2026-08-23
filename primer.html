@@ -144,7 +144,10 @@
 <p>A process called the <strong>farm</strong>. Anyone can run one; the owner picks theirs by setting its key as the brain's executor. The farm decrypts the jar, verifies the hash, asks the model what to do on the declared schedule, and submits the trade through the guard. In production the farm runs inside a hardware enclave (Intel TDX) with remote attestation, registers its measurement on-chain, and is only paid its runtime fee while it's attested. In the prototype it's a process holding the enclave key.</p>
 
 <h3>Can the owner read the prompt?</h3>
-<p>Under sealed custody, no. Not the owner, not the creator, not the harvester. Under sealed-authored custody the original author knows what they wrote and nobody after them does. Under authored custody every owner can. The mode is a public trait, so you always know which you're buying.</p>
+<p>Under sealed custody, no. Not the owner, not the creator, not the harvester. Under sealed-authored custody the original author knows what they wrote and nobody after them does. Under authored custody every owner can. The mode is a public trait, so you always know which you're buying. Two parties do see it, and the design says so: the runtime that decrypts it (a hardware enclave in production, a process holding the key in the prototype), and the model provider that answers the prompt on every tick, until the TEE inference gateway is in use.</p>
+
+<h3>Where's the trust gap?</h3>
+<p>Four places, none hidden. The enclave is not yet a hardware enclave: the sealing is real, the TDX attestation path is built, but today the key sits in a process's environment and the registry labels it "self-reported". The model provider sees the prompt. NAV is a spot quote from the curated venue (a Chainlink feed on the paper market, which is fine; on a live venue it needs TWAP or oracle pricing plus a crystallization delay, and that's the first protocol item). And all of it is testnet only, with mock money and no live venue. The landing page has the same list in a table, and the <a href="/docs/whitepaper">paper</a> goes into each.</p>
 
 <h3>Can the brain steal the money?</h3>
 <p>The executor key's only entrypoint is <code>executeTrade</code>, proceeds always return to source, and the venues are curated, so there's no path to an outside address. The tests include a fuzzed no-extraction invariant. The honest failure mode is a brain that trades badly, and that's on the record for everyone to see.</p>
@@ -205,7 +208,7 @@
     <footer class="footer">
         <div class="container">
             <div class="footer-bottom">
-                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026</p>
+                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026 · <a href="https://github.com/thingg-co/bronkers.com" rel="noopener">Source</a></p>
             </div>
         </div>
     </footer>

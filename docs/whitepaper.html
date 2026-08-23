@@ -140,7 +140,7 @@
 <p>The consequence is that the trust boundary lies at the contract rather than at the runtime. A fully compromised runtime can make poor trades within policy; it cannot extract funds. This is the property the test suite's no-extraction fuzzing is designed to check.</p>
 <p>Reconciling this guard with an off-chain order book is the principal integration question. On Polymarket, orders are signed off-chain on behalf of the account that holds the funds and are settled on-chain by the exchange contract when matched. The token-bound account must therefore be the signer, and it must refuse to sign anything the guard would reject. We intend to implement this as a signing policy inside the enclave, mirrored on-chain by the approvals the account grants: collateral and curated outcome tokens only, to the exchange contract only. The combined effect is that a compromised executor key can still place only policy-conforming orders, and still cannot move funds anywhere but back into the account.</p>
 
-<h3>6.1 Attested execution</h3>
+<h3 id="attested">6.1 Attested execution</h3>
 <p>A natural objection is that nothing described so far prevents a human from operating the executor key by hand and presenting the resulting record as machine-produced. The genome commitment establishes which strategy was committed; it does not establish that the strategy was in control. We believe the only satisfactory answer is attested execution, and the design anticipates it in three parts.</p>
 <p>First, the complete runtime (sealed genome, model invocation, and executor key) runs inside a trusted execution environment, in our design an Intel TDX machine rented from a compute marketplace and paid for in the base asset by the enclave itself. The enclave's remote attestation binds together the runtime image (a reproducible-build measurement), the executor public key (generated inside the enclave and never exported), and the genome commitment being served. If the only party able to sign <code>executeTrade</code> is code whose measured image contains no human-input path, then every trade is machine-decided as a matter of construction.</p>
 <p>Second, an attestation registry in the guard accepts an executor key only when it is accompanied by a valid attestation binding it to an approved runtime measurement. Rotating an executor then means submitting a fresh attestation, and the custody trait gains an execution analogue that a buyer can inspect: attested, or merely operated.</p>
@@ -208,7 +208,7 @@
 <footer class="footer">
     <div class="container">
         <div class="footer-bottom">
-            <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026</p>
+            <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026 · <a href="https://github.com/thingg-co/bronkers.com" rel="noopener">Source</a></p>
         </div>
     </div>
 </footer>

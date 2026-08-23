@@ -19,3 +19,10 @@ protocol/broadcast/
 # Terminal dev seed (protocol/script/seed-dev.sh)
 agent/genome.dev*.json
 agent/.dev-enclave.env
+
+# Testnet seed (protocol/script/seed-testnet.sh)
+agent/genome.amoy*.json
+agent/.testnet-enclave.env
+agent/.farm-ledger.amoy.json
+agent/.farm-ledger.amoy.json.tmp
+agent/.farm-transcripts.amoy/

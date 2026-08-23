@@ -272,12 +272,40 @@
             </div>
         </section>
 
+        <section class="section">
+            <div class="container">
+                <h2 class="section-title">What is real today, and what isn't yet</h2>
+                <p class="roster-note">The gap between the prototype and the design, stated where a skeptic would look for it. The paper and the architecture note go into each.</p>
+                <div class="tablewrap">
+                    <table class="table reality">
+                        <tr><th>Real today</th><th>Not yet</th></tr>
+                        <tr>
+                            <td>The contracts and their tests: the executor key's only entrypoint, proceeds-to-source, the 4,096 live cap, seasoning, cadence, seat tiers, fees above a per-share high-water mark, generations and camp, reaping. 94 Foundry tests, fuzzed no-extraction invariant.</td>
+                            <td><strong>A hardware enclave.</strong> The sealing cryptography is real (X25519 → HKDF → AES-GCM to the runtime's key), but the runtime that holds that key is a process with the key in its environment. The TDX path (Automata DCAP verifier, attested registration, the lease loop) is built and not yet deployed; the registry labels today's runtimes <em>self-reported</em>. Until it runs in a TEE, "nobody can read the prompt" means "nobody outside the operator's process". <a href="/docs/whitepaper#attested">Paper §6.1</a>.</td>
+                        </tr>
+                        <tr>
+                            <td>A public paper market on Polygon Amoy: the real contracts, Chainlink ETH/USD and BTC/USD prices, mock tokens, fake money. Anyone can mint, fund, enrol, deposit, ring a bell.</td>
+                            <td><strong>Inference the model provider can't see.</strong> The brain's prompt is sent to the model on every tick. Today that is Anthropic's API (or the owner's own key); the TEE inference gateway paid in the base asset is the production path and is not yet wired. The provider sees the prompt; no owner, buyer, or operator does.</td>
+                        </tr>
+                        <tr>
+                            <td>The farm: one process that finds every enrolled brain's sealed jar on-chain, verifies it against the commitment, runs it at its declared cadence, commits a transcript hash with each trade, keeps a ledger per brain, and tops up its own (mock) machine lease.</td>
+                            <td><strong>Manipulation-resistant NAV.</strong> Net asset value is a spot quote from the curated venue. On the paper market that quote is a Chainlink feed, which is fine; on a live venue it is the first thing to fix (TWAP or oracle pricing plus a fee-crystallization delay), and it is the first item on the protocol list. <a href="/docs/architecture">Architecture §7</a>.</td>
+                        </tr>
+                        <tr>
+                            <td>A record anyone can recompute: every trade, fee, and generation is an event from an address the token provably controls; the Terminal recomputes NAV and returns in the browser with no backend.</td>
+                            <td><strong>Mainnet, real money, a live venue.</strong> None of it. Testnet only, no token, no deposits taken, and the Polymarket adapter described in the paper is a design, not code. Nothing on this site is an offer of anything.</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <footer class="footer">
         <div class="container">
             <div class="footer-bottom">
-                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026</p>
+                <p>Brok<span class="typo-n">n</span>ers is a research prototype. Testnet only. Provided as-is, without warranty of any kind. &copy; 2026 · <a href="https://github.com/thingg-co/bronkers.com" rel="noopener">Source</a></p>
             </div>
         </div>
     </footer>

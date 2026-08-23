@@ -12,7 +12,10 @@ session needs to know that the code doesn't say.
   holding company anywhere in the repo: not in copy, footers, licences,
   package names, identifiers, protocol constants, or comments (scrubbed Aug
   2026 at the owner's request). The git remote's org name is the one thing
-  we cannot change from here.
+  we cannot change from here. One deliberate exception (Aug 2026, for the
+  HN submission): the footer "Source" link on every page and the README
+  point at the public repo URL, which carries the org name. A URL, not copy;
+  leave it.
 
 ## Non-negotiable conventions
 1. **Silly copy, serious code.** Page copy is memes (brains in jars, the

@@ -1398,6 +1398,35 @@ input[type="file"].jarfile { font-size: var(--text-sm); }
 .cred-panel { margin-top: var(--space-sm); padding-top: var(--space-sm); border-top: 1px solid var(--border-subtle); }
 .cred-panel h5 { margin: 0 0 var(--space-xs); }
 
+/* First-visit alpha notice (js/main.js), shown once per browser */
+html.modal-open { overflow: hidden; }
+.alpha-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--container-padding);
+    background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+    backdrop-filter: blur(6px);
+}
+.alpha-modal {
+    max-width: 34rem; width: 100%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-top: 4px solid var(--accent-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-lg);
+}
+.alpha-eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--text-xs); font-weight: 600; color: var(--accent-primary); margin: 0 0 var(--space-xs); }
+.alpha-modal h2 { font-size: var(--text-xl); margin: 0 0 var(--space-sm); text-wrap: balance; }
+.alpha-modal ul { margin: 0 0 var(--space-md); padding-left: var(--space-md); color: var(--text-secondary); }
+.alpha-modal li { margin: var(--space-xs) 0; }
+.alpha-modal li::marker { color: var(--accent-primary); }
+.alpha-actions { display: flex; justify-content: flex-end; }
+
+/* landing: the "real today / not yet" table */
+.table.reality th, .table.reality td { width: 50%; vertical-align: top; }
+.table.reality td:first-child { font-weight: 400; }
+
 /* 9. Motion ------------------------------------------------------------------ */
 
 @keyframes ticker-scroll {
