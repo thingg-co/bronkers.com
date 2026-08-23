@@ -635,8 +635,20 @@ pre code {
 .doc-links a { font-weight: 600; }
 
 .doc-links.center {
-    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
     margin-top: var(--space-md);
+}
+
+.doc-links .sep { color: var(--text-secondary); }
+
+/* stack the links, one per line, once they no longer fit on one */
+@media (max-width: 640px) {
+    .doc-links.center { flex-direction: column; gap: var(--space-xs); }
+    .doc-links .sep { display: none; }
 }
 
 /* card grid: flex so an incomplete last row centres */
