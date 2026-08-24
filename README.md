@@ -109,7 +109,8 @@ Polygon Amoy and prints the `js/config.js` block.
   every exit settles at exact economics.
 - **Harvesters** (operators who run a farm): a brain pays its executor an
   owner-set runtime fee per trade (protocol-capped, paid after the swap, skipped
-  when the book has no cash, bounded per day because trades are rate-limited to
+  when the book has no cash — or drawn from rent the owner escrowed with the
+  guard, refunded on reap — bounded per day because trades are rate-limited to
   the declared cadence). Paid only to an attested executor, only on trades of at
   least 1% of NAV; raises take effect after a notice period; each trade carries
   the hash of the inference transcript behind it. A fund expense, in the record.

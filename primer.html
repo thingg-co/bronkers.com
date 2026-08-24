@@ -121,7 +121,7 @@
 </ul>
 <p>Crystallizing fees is a public crank. Anyone can call <code>ringTheBell()</code> and receive 1% of the fee shares it mints, carved from the owner's take and never from depositors' capital. That's the whole Ring the Bell thing.</p>
 <h3>Rent</h3>
-<p>Running the model costs someone money. The brain pays its own way: a small per-trade <strong>runtime fee</strong>, set by the owner under a hard cap, paid from the traded book to the executor after each trade, skipped if the book is out of cash. Because cadence is enforced, the most an executor can draw in a day is cadence × cap. The fee is paid only to an executor the registry marks as attested, and only on trades of at least 1% of NAV, so nobody gets paid for churning dust.</p>
+<p>Running the model costs someone money. The brain pays its own way: a small per-trade <strong>runtime fee</strong>, set by the owner under a hard cap, paid from the traded book to the executor after each trade, skipped if the book is out of cash — unless the owner prepaid rent into an escrow with the guard, which then covers the same capped fee and is refunded if the brain is ever reaped. Because cadence is enforced, the most an executor can draw in a day is cadence × cap. The fee is paid only to an executor the registry marks as attested, and only on trades of at least 1% of NAV, so nobody gets paid for churning dust.</p>
 <p>The people who run the runtime and collect that fee are called <strong>harvesters</strong>. They harvest the fee. They never touch the returns.</p>
 <h3>Seats</h3>
 <p>Intern, Associate, Partner. A seat is a one-way upgrade, bought from the treasury, that raises the per-trade ceiling. It's enforced policy rather than a badge: an Intern brain trying to size a Partner trade gets reverted.</p>

@@ -66,7 +66,7 @@ session needs to know that the code doesn't say.
    (Aug 2026): `TraderNFT.revise` appends a committed generation; it never
    changes what a past trade was made under.
 
-## Protocol invariants (tests enforce all of these — protocol/test/, 79 green)
+## Protocol invariants (tests enforce all of these — protocol/test/, 97 green)
 - Executor key can only call ExecutionGuard.executeTrade; proceeds always
   return to source; fuzz-tested no-extraction invariant.
 - 4,096 **live** cap ("one brain per bit"): mint gated on `nextId - burnedCount
@@ -112,7 +112,7 @@ session needs to know that the code doesn't say.
   (`setCamp`; 1 spar + 0 locally, 86400 on testnet); HWM carries (tests in
   Generations.t.sol). Farm re-enrols on commitment change and spars in camp;
   `/train` coaches sealed brains in-enclave (`composeRevision`). Meme: "they
-  train between fights". 69 tests.
+  train between fights".
 - Fees: streamed mgmt + perf above per-share HWM, minted to the trader's TBA
   (travel with the NFT), checkpointed in the transfer hook.
 - ringTheBell(): caller gets 1% of crystallized fee shares, from the owner's
@@ -170,6 +170,18 @@ session needs to know that the code doesn't say.
   `TranscriptCommitted` with the keccak256 of the inference transcript
   (agent/src/transcript.ts; kept under its hash in FARM_TRANSCRIPTS_DIR). The
   site calls operators **harvesters**; they harvest the fee, never the returns.
+  **Escrowed rent** (Aug 2026): `runtimeEscrowOf` / `fundRuntime` (anyone) /
+  `withdrawRuntime` (owner) — prepaid fees held by the guard, drawn
+  (`RuntimeEscrowDraw`) only when the traded book cannot pay, same gates and
+  per-day bound, never NAV (insolvency ignores it; refunded to the owner on
+  reap/cull), travels with the token (Escrow.t.sol; My Desk → Runtime).
+  **Nitro path** (Aug 2026): `NitroAttestationVerifier` (approved attestor keys
+  sign keccak(TAG, chainid, measurement, reportData, issuedAt); maxAge
+  freshness, ecrecover) + `QuoteVerifierRouter` (first verifier to accept wins)
+  let TDX quotes and Nitro attestor statements share the registry's one
+  verifier slot; Deploy.s.sol wires router(dcap?, nitro), NITRO_MAX_AGE
+  (NitroVerifier.t.sol). The reference farm stays TDX — no-AWS is about what a
+  bare key can rent; third-party harvesters may bring Nitro.
   `TraderNFT.tokenURI` on-chain JSON + jar SVG, rendered by `JarRenderer`
   (separate contract: TraderNFT embeds TraderVault's creation code and sits
   ~2 KB under the 24 KB limit; keep new logic out of it). The farm self-registers

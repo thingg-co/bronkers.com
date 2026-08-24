@@ -12,8 +12,10 @@ published jars, calls a model, and signs `executeTrade`. To satisfy the
 constraint it needs four things, each payable in crypto by a program, not a
 person:
 
-1. **A TEE host** (Intel TDX or AMD SEV-SNP; not AWS Nitro) that an EVM wallet
-   can rent and extend, with a remote-attestation quote we can verify.
+1. **A TEE host** (Intel TDX or AMD SEV-SNP for the farm we run; AWS Nitro
+   cannot be rented by a bare key, though a harvester with an AWS account can
+   register through the Nitro attestor path below) that an EVM wallet can rent
+   and extend, with a remote-attestation quote we can verify.
 2. **Model inference** payable per request in USDC, since Anthropic's API
    takes cards only (third-party crypto cards and gift-subscription resellers
    exist, but they are manual and off-policy).
@@ -122,7 +124,11 @@ picked up there.
    trade carrying the keccak256 of its inference transcript
    (`executeTradeWithTranscript`); the farm keeps the transcripts under their
    hashes (`FARM_TRANSCRIPTS_DIR`) for audit. A farm whose measurement is not
-   approved runs its brains but is not paid, and says so at start.
+   approved runs its brains but is not paid, and says so at start. Owners can
+   also escrow rent with the guard (`fundRuntime`): when a traded book cannot
+   cover the fee, the guard draws the same capped amount from the escrow
+   (`RuntimeEscrowDraw`), so a thin book keeps paying its way instead of
+   running up credit; owner-withdrawable, refunded on reap or cull.
 2. **Inference backend.** `GatewayBrain` next to `ClaudeBrain`: OpenAI-compatible
    chat completions with a forced tool call, `INFERENCE_BASE_URL` /
    `INFERENCE_API_KEY`, usage priced by `INFERENCE_PRICE_IN/OUT`. Selected
@@ -142,14 +148,26 @@ picked up there.
    still requires a deployer-approved measurement either way. Wired by
    `deploy-testnet.sh` on chains where the entrypoint exists (Amoy included).
    The farm registers attested when `FARM_QUOTE_PATH` holds a quote, and prints
-   at start the report data the quote must carry.
+   at start the report data the quote must carry. `NitroAttestationVerifier`
+   adds a second evidence format for harvesters on AWS Nitro: an approved
+   attestor (an off-chain verifier, itself an enclave) checks the raw
+   attestation document and signs a compact statement — measurement over the
+   PCRs, report data, issued-at — that the adapter checks with ecrecover
+   against approved keys and a freshness bound; `QuoteVerifierRouter` tries
+   DCAP first, then Nitro, so both formats register through the registry's one
+   verifier slot. The trust root is one link longer (the deployer approves
+   attestor keys), disclosed; it still counts as hardware because the binding
+   comes from an attestation document, not the key's claim. The farm we run
+   stays on TDX — a bare key cannot rent Nitro — but an operator with an AWS
+   account can harvest from one.
 4. **Bridge.** `agent/src/bridge.ts` (`npm run bridge`): CCTP v2 burn on the
    protocol chain, Iris attestation, mint on Arbitrum; mainnet addresses and
    testnet addresses, domains 7 → 3. The farm prints the command when it cannot
    extend the lease for lack of float. On testnet the base asset is a mock, so
    the bridge has meaning on mainnet only.
-5. **Docs and paper.** "AWS Nitro" is gone; the paper's §6.2 describes the fee,
-   the credit policy and the lease; the declared cadence is now enforced
+5. **Docs and paper.** The paper's §6.2 describes the fee, the escrow
+   backstop, the credit policy and the lease; §6.1 the evidence formats (TDX
+   quote, Nitro attestor statement); the declared cadence is now enforced
    on-chain, which is what bounds the fee per day.
 
 ## Runbook

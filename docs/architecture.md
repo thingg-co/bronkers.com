@@ -188,7 +188,11 @@ so administrative control follows the token automatically on transfer.
 
 **Runtime fee.** `runtimeFeeOf(tokenId)` (owner-set via `setRuntimeFee`, ≤ the
 deployer's `maxRuntimeFee`) is paid in the base asset from the traded source to the
-executor after each successful trade, and skipped if the source has no base left.
+executor after each successful trade, and skipped if the source has no base left —
+unless the owner escrowed rent with the guard (`fundRuntime`): then the same capped fee
+is drawn from the escrow (`RuntimeEscrowDraw`). Escrow is opex, not capital: anyone may
+fund it, only the owner withdraws it, insolvency ignores it, and it is refunded to the
+owner on reap or cull (`Escrow.t.sol`).
 Capped per trade, post-trade, and bounded per day because trades are bounded by the
 enforced cadence: the most an executor can ever draw is cadence × cap a day. Paid for
 evidence rather than claims: when the deployer has set a `registry`, only an executor
@@ -222,6 +226,15 @@ the configured maximum, and returns `keccak256(mrTd ‖ rtMr0 ‖ rtMr1 ‖ rtMr
 the measurement. `Deploy.s.sol` wires it when `DCAP_ATTESTATION` is set;
 `deploy-testnet.sh` sets it where the entrypoint exists. Tests drive both the registry
 (mock verifier) and the adapter's parsing (mock entrypoint, synthetic output).
+
+`NitroAttestationVerifier` is a second evidence format: an approved attestor — an
+off-chain verifier, itself an enclave — checks a raw AWS Nitro attestation document and
+signs `keccak256(abi.encode(TAG, chainid, measurement, reportData, issuedAt))` with a
+secp256k1 key the deployer approved; the adapter recovers the signer and enforces a
+freshness bound (`maxAge`, small forward skew). `QuoteVerifierRouter` holds the
+registry's one verifier slot and tries each adapter in order (DCAP, then Nitro), so a
+harvester registers with whichever evidence its machine produces. One more trusted link
+than DCAP (the attestor key), disclosed. Tests: `NitroVerifier.t.sol`.
 
 ### 2.2c Credentials.sol
 
@@ -490,14 +503,14 @@ writes through the wallet, no backend. Structure, behaviour and the dev loop are
 | Wash-traded track record | protocol-curated venues/tokens (owner cannot add own pools) + paper season before outside deposits | + leaderboard footnoting, volume-quality weighting |
 | Instant-flip of fresh mints | paper season: min own-book trades + duration before vault opens | same, longer parameters |
 | Executor churns trades to farm the runtime fee | fee capped per trade, trades rate-limited on-chain to the declared cadence (at most cadence × cap a day), and no fee on trades under `minFeeNotionalBps` of NAV | same |
-| Operator paid for work it did not do (wrong model, no model) | fee paid only to an executor the registry marks attested; each trade carries the transcript hash for audit | hardware-attested registration through the DCAP adapter; transcripts disclosed on request |
+| Operator paid for work it did not do (wrong model, no model) | fee paid only to an executor the registry marks attested; each trade carries the transcript hash for audit | hardware-attested registration through the DCAP or Nitro-attestor adapters; transcripts disclosed on request |
 | Fee raised on depositors without notice | raises take effect after `runtimeFeeDelay`; lowering is immediate | same, with a longer period |
 | Strategy swapped under depositors' money | sealed revisions are additive-only: the chain accepts only enclave-countersigned parent→next edges, and the enclave only signs appended coach's notes; plus camp (`campMinTrades` own-book spars, `revisionNotice`), per-generation attribution, HWM carry | same, with the signature from an attested TEE |
 | Stale executor after sale | buyer checklist: rotate key | consider auto-reset of executor on transfer |
 | Seller's API key spent on the buyer's brain, or buyer's brain leaking to the seller's account | a credential is active only while `publisher == ownerOf`; the farm rebuilds on change | same |
 | Owner exfiltrates the sealed prompt through a bring-your-own inference endpoint | owner may bring a key, not an endpoint: hosts allowlisted by the operator, https only | same, allowlist = attested TEE gateways |
 | NFT deposited into own TBA (ownership cycle) | blocked: TBA cannot receive its own collection | same |
-| Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP adapter ("Proof of Brain") |
+| Human puppeteering the "AI" (impersonation) | disclosed: AI-traded is an operator claim; registry labels self-reported vs hardware | TEE-attested executor keys through the DCAP or Nitro-attestor adapters ("Proof of Brain") |
 | Operator runs brains at a loss and stops | per-brain credit; paused brains are told the covering fee; lease topped up from fees | same, with the lease on a market a bare key pays |
 | Fee sniping around transfer | fees accrue to TBA + checkpoint in transfer hook | same |
 | Griefing: reaping a live or dormant-but-wanted brain | reap/cull only touch a brain with zero shares and dust NAV, idle past `reapDelay`; the owner refunds to keep it | same, tunable delay |

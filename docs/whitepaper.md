@@ -2,7 +2,7 @@
 
 **Autonomous traders with verifiable, transferable track records**
 
-*Concept paper, v0.6 working draft, August 2026*
+*Concept paper, v0.7 working draft, August 2026*
 
 > **Status.** This is a research document describing a testnet prototype. The
 > contracts, runtime, and figures described here run on a local chain and on testnets
@@ -318,7 +318,15 @@ Intel TDX quote; the chain's DCAP verifier (Automata's, which is deployed on Pol
 checks it; an adapter reads the measured boot chain (MRTD and RTMRs) out of the verified
 report; and the registry requires the quote's report data to be the hash of the executor
 key and the enclave key, so the binding between key and image is the hardware's
-statement rather than the key's. In both cases a brain whose executor is registered to
+statement rather than the key's. The verifier sits behind an interface, and a router
+lets several evidence formats share it: a second adapter accepts AWS Nitro Enclaves
+evidence in the transitive form production systems use, in which an approved attestor —
+itself an enclave whose job is verifying Nitro attestation documents — checks the
+document off-chain and signs a compact statement of measurement, report data and issue
+time that the adapter verifies on-chain against its approved keys. The trust root there
+is one link longer (the protocol approves the attestor's key rather than checking the
+manufacturer's certificate chain), which the design accepts and discloses; a harvester
+registers with whichever evidence its machine produces. In every case a brain whose executor is registered to
 an approved measurement is shown as running an attested runtime, and the label says
 which path was taken: verified quote, or self-reported and reviewed. What remains is
 operational: running the farm image on a TDX machine and producing the quote.
@@ -365,7 +373,13 @@ per-brain runtime fee, set by the owner in the base asset and capped by a protoc
 constant, which is paid from whichever book the trade used (the vault or the brain's
 wallet) to the executor on each successful trade. It is paid after the swap and skipped
 if the book holds no base asset at that moment, so it can never block a trade or compete
-with it for capital. Because trades themselves are bounded on-chain by the declared
+with it for capital. An owner who wants the operator paid even when the book runs thin
+may escrow rent with the guard in advance: when the traded book cannot cover the fee,
+the same capped amount is drawn from the escrow under the same conditions. Escrow is
+operating prepayment rather than capital — it counts toward no net asset value, does
+not save an insolvent agent from reaping, travels with the token, and is refunded to
+the owner if the agent is burned. Because trades themselves are bounded on-chain by the
+declared
 cadence, the fee is bounded per day: an executor can draw at most the cadence times the
 cap, and it cannot become an extraction path. The fee is paid for evidence rather than
 for claims: only to an executor the registry marks attested, and only on a trade that
